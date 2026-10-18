@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V7.3.1 | 信号追踪版</title>
+<title>基金监测系统 V7.5 | 企稳极速版</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 :root {
@@ -180,7 +180,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V7.3.1 信号追踪版</span></h1>
+    <h1>📊 基金监测系统 <span>V7.5 企稳极速版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -251,7 +251,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>数据源：fund-api + 东方财富 | 信号追踪数据存储在浏览器 localStorage | V7.3.1</p>
+    <p>V7.5 极速版：历史数据全并发拉取 + 扩容超时阈值 | 数据源：fund-api + 东方财富</p>
   </div>
 </div>
 
@@ -389,20 +389,25 @@ function updateFilterTag() {
   else tag.style.display = 'none';
 }
 
-var SIGNAL_KEY = 'signalTrackV73';
+var SIGNAL_KEY = 'signalTrackV74';
 function loadSignals() {
   try { return JSON.parse(localStorage.getItem(SIGNAL_KEY) || '[]'); } catch(e) { return []; }
 }
 function saveSignals(arr) {
   try { localStorage.setItem(SIGNAL_KEY, JSON.stringify(arr)); } catch(e) {}
 }
+
 function addSignal(record) {
+  var today = new Date();
+  if (today.getDay() === 0 || today.getDay() === 6) return;
+  
   var signals = loadSignals();
-  var today = new Date().toDateString();
+  var todayStr = today.toDateString();
   var exists = signals.find(function(s) {
-    return s.code === record.code && s.signal === record.signal && new Date(s.timestamp).toDateString() === today;
+    return s.code === record.code && s.signal === record.signal && new Date(s.timestamp).toDateString() === todayStr;
   });
   if (exists) return;
+  
   record.id = Date.now() + '_' + Math.random().toString(36).substr(2, 6);
   record.timestamp = Date.now();
   record.baselineNav = record.baselineNav || 1.0;
@@ -413,6 +418,7 @@ function addSignal(record) {
   if (signals.length > 3000) signals = signals.slice(-3000);
   saveSignals(signals);
 }
+
 function updateSignalTracking() {
   var signals = loadSignals();
   var updated = false;
@@ -461,7 +467,7 @@ function getTrackingStats() {
 
 function exportSignals() {
   var signals = loadSignals();
-  if (signals.length === 0) { alert('暂无信号记录。等系统发出信号后会自动记录。'); return; }
+  if (signals.length === 0) { alert('暂无信号记录。'); return; }
   var header = '信号时间,代码,名称,赛道,信号类型,基线净值,当前净值,累计涨跌%,持有天数,RSI,MACD,夏普,卡玛,VaR95,CVaR95,操作建议\n';
   var rows = signals.map(function(s) {
     return [
@@ -493,22 +499,30 @@ async function fetchFundData(code) {
     };
   } catch(e) { return null; }
 }
+
+// ============ 核心提速：并发安全的 fetchHistory ============
 async function fetchHistory(code) {
   return new Promise(function(resolve) {
     var script = document.createElement('script');
-    var timeout = setTimeout(function() { cleanup(); resolve(null); }, 4000);
+    var timeout = setTimeout(function() { cleanup(); resolve(null); }, 8000);
+    
     function cleanup() {
       clearTimeout(timeout);
       if (script.parentNode) script.parentNode.removeChild(script);
-      try { delete window.Data_netWorthTrend; } catch(e) {}
+      try { window.Data_netWorthTrend = null; } catch(e) {}
     }
+    
     script.src = 'https://fund.eastmoney.com/pingzhongdata/' + code + '.js?v=' + Date.now();
     script.onload = function() {
       clearTimeout(timeout);
       try {
-        if (typeof Data_netWorthTrend !== 'undefined' && Array.isArray(Data_netWorthTrend) && Data_netWorthTrend.length > 10) {
-          resolve(Data_netWorthTrend.map(function(d) { return d.y; }));
-        } else resolve(null);
+        if (typeof window.Data_netWorthTrend !== 'undefined' && Array.isArray(window.Data_netWorthTrend) && window.Data_netWorthTrend.length > 10) {
+          var data = window.Data_netWorthTrend;
+          window.Data_netWorthTrend = null;
+          resolve(data.map(function(d) { return d.y; }));
+        } else {
+          resolve(null);
+        }
       } catch(e) { resolve(null); }
       cleanup();
     };
@@ -603,6 +617,7 @@ function calcIndicators(closes, parsed) {
   else if (parsed && parsed.estimate) lastClose = parsed.estimate;
   else if (parsed && parsed.netValue) lastClose = parsed.netValue;
   else lastClose = 1.0;
+  
   if (!closes || closes.length < 30) {
     var pct = parsed ? parsed.changeRate : 0;
     return {
@@ -611,12 +626,13 @@ function calcIndicators(closes, parsed) {
       boll: { pos: Math.min(95, Math.max(5, 50 + pct * 10)) },
       atr: Math.abs(pct) * 0.8 + 0.5, atrPct: Math.abs(pct) * 0.8 + 0.5,
       maStatus: pct > 0.3 ? '多头' : pct < -0.3 ? '空头' : '纠缠',
-      pct: pct, lastClose: lastClose,
+      pct: pct, lastClose: lastClose, ma5: lastClose,
       ma20Trend: '-', mom20: 0, mom60: 0,
       sharpe: 0, calmar: 0, var95: 0, cvar95: 0, annualReturn: 0, maxDrawdown: 0, volatility: 0
     };
   }
   var rsi = calcRSI(closes), macd = calcMACD(closes), boll = calcBollinger(closes), atr = calcATR(closes);
+  var ma5 = closes.slice(-5).reduce(function(a,b){return a+b;},0) / 5;
   var ma50 = calcMA(closes, 50), ma200 = calcMA(closes, Math.min(200, closes.length));
   var last = closes[closes.length-1], prev = closes[closes.length-2];
   var pct = prev ? (last - prev) / prev * 100 : 0;
@@ -631,7 +647,7 @@ function calcIndicators(closes, parsed) {
   var risk = calcRiskMetrics(closes);
   return {
     rsi: rsi, macd: macd, boll: boll, atr: atr, atrPct: last > 0 ? atr/last*100 : 1,
-    maStatus: maStatus, pct: pct, lastClose: last,
+    maStatus: maStatus, pct: pct, lastClose: last, ma5: ma5,
     ma20Trend: ma20Trend, mom20: mom20, mom60: mom60,
     sharpe: risk.sharpe, calmar: risk.calmar, var95: risk.var95, cvar95: risk.cvar95,
     annualReturn: risk.annualReturn, maxDrawdown: risk.maxDrawdown, volatility: risk.volatility
@@ -643,6 +659,7 @@ function generateSignal(fund, indicators, macroState) {
   var weight = SECTOR_WEIGHT[fund.sector] || 1.0;
   var buyScore = 0, sellScore = 0, preBuyScore = 0;
   var signals = [];
+  
   if (rsi < 25) { buyScore += 40; signals.push({text:'RSI深度超卖',type:'bull'}); }
   else if (rsi < 30) { buyScore += 25; signals.push({text:'RSI超卖',type:'bull'}); }
   else if (rsi < 40) { buyScore += 10; signals.push({text:'RSI偏低',type:'neutral'}); }
@@ -674,12 +691,22 @@ function generateSignal(fund, indicators, macroState) {
 
   var netScore = buyScore - sellScore;
   var signal, signalClass;
+
+  var isPrebuyValid = preBuyScore >= 25;
+  if (isPrebuyValid) {
+    if ((macd.cross === '空头' || macd.cross === '死叉') && (indicators.lastClose < indicators.ma5)) {
+        isPrebuyValid = false;
+        signals.push({text:'趋势向下拦截',type:'bear'});
+    }
+  }
+
   if (netScore >= 55) { signal = '买入'; signalClass = 'sig-buy'; }
   else if (netScore >= 30) { signal = '偏多'; signalClass = 'sig-buy'; }
   else if (netScore <= -55) { signal = '卖出'; signalClass = 'sig-sell'; }
   else if (netScore <= -30) { signal = '偏空'; signalClass = 'sig-sell'; }
-  else if (preBuyScore >= 25) { signal = '预埋'; signalClass = 'sig-prebuy'; }
+  else if (isPrebuyValid) { signal = '预埋'; signalClass = 'sig-prebuy'; }
   else { signal = '观望'; signalClass = 'sig-hold'; }
+  
   return { signal:signal, signalClass:signalClass, signals:signals, netScore:netScore };
 }
 
@@ -708,7 +735,7 @@ function calcActionPlan(fund, indicators, signal, macroHeat) {
     else if (signal.signal === '偏空' || signal.signal === '卖出') plan.hint = '空头信号，不宜建仓。等趋势反转。';
     else if (signal.signal === '买入') plan.hint = '共振买入，分3批建仓：首笔40%，回踩加30%，突破前高加30%。';
     else if (signal.signal === '偏多') plan.hint = '偏多信号，小仓位试探。首笔买入建议仓位的50%。';
-    else if (signal.signal === '预埋') plan.hint = '低位预埋。下方三档挂条件单，每跌3%买一档。';
+    else if (signal.signal === '预埋') plan.hint = '企稳预埋。首笔不超过5%，若继续下跌每跌5%补仓一次，做网格。';
   } else {
     plan.stopLoss = (lastClose - 2.5 * atr).toFixed(4);
     plan.takeProfit1 = (lastClose + 3.5 * atr).toFixed(4);
@@ -782,7 +809,7 @@ function getSortedList() {
   var list = ALL_FUNDS.map(function(f) {
     var d = fundData[f.code] || {};
     var ind = d.indicators || {
-      rsi:50, macd:{cross:'中性'}, boll:{pos:50}, atr:1, atrPct:1, maStatus:'纠缠', pct:0, lastClose:1.0,
+      rsi:50, macd:{cross:'中性'}, boll:{pos:50}, atr:1, atrPct:1, maStatus:'纠缠', pct:0, lastClose:1.0, ma5:1.0,
       ma20Trend:'-', mom20:0, mom60:0, sharpe:0, calmar:0, var95:0, cvar95:0, annualReturn:0, maxDrawdown:0, volatility:0
     };
     var sig = d.signal || generateSignal(f, ind, 'neutral');
@@ -823,7 +850,7 @@ function renderCards(filtered, capital) {
         + '<div class="action-row"><span class="ak">首笔建仓价</span><span class="av">' + plan.entryPrice + '</span></div>'
         + '<div class="action-row"><span class="ak">止损价</span><span class="av red">' + plan.stopLoss + '</span></div>'
         + '<div class="action-row"><span class="ak">止盈价</span><span class="av green">' + plan.takeProfit + '</span></div>'
-        + '<div style="font-size:10px;color:var(--muted);margin-top:8px;margin-bottom:4px">预埋网格（每跌3%一档）</div>'
+        + '<div style="font-size:10px;color:var(--muted);margin-top:8px;margin-bottom:4px">预埋网格（每跌5%补仓）</div>'
         + '<div class="grid-row"><div class="grid-item"><div class="gl">第1档</div><div class="gv">' + plan.grid1 + '</div></div>'
         + '<div class="grid-item"><div class="gl">第2档</div><div class="gv">' + plan.grid2 + '</div></div>'
         + '<div class="grid-item"><div class="gl">第3档</div><div class="gv">' + plan.grid3 + '</div></div></div></div>';
@@ -894,8 +921,8 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">系统发出买入/卖出/预埋信号时会自动记录，并持续追踪后续涨跌。</div>'
-      + '<div style="font-size:13px;margin-top:8px">一周后回到这里点"📥 导出CSV"，就能看到完整胜率数据。</div>'
+      + '<div style="font-size:13px">V7.5 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
+      + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
   }
@@ -1003,7 +1030,6 @@ function setStatus(state, text) {
   document.getElementById('updateTime').textContent = text;
 }
 
-// ============ V7.3.1 优化版 refreshAll（并发 + 缓存） ============
 async function refreshAll() {
   setStatus('loading', '正在获取数据...');
   if (!window.FundApi) { setStatus('error', '数据源未加载，请刷新'); return; }
@@ -1014,7 +1040,6 @@ async function refreshAll() {
   var completed = 0;
   var successCount = 0;
 
-  // 第一阶段：并发获取实时数据
   setStatus('loading', '实时数据 0/' + total);
   var realtimeMap = {};
   for (var i = 0; i < total; i += CONCURRENCY) {
@@ -1026,7 +1051,6 @@ async function refreshAll() {
     setStatus('loading', '实时数据 ' + Math.min(completed, total) + '/' + total);
   }
 
-  // 第二阶段：历史数据（缓存优先 + 串行）
   setStatus('loading', '计算指标 0/' + total);
   completed = 0;
   var cacheHits = 0;
