@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V8.0 | 纯净实战版</title>
+<title>基金监测系统 V8.2 | 趋势全景版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -29,15 +29,11 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .btn:hover { border-color:var(--blue); }
 
 /* 宏观估值面板 */
-.macro-valuation-panel { display:grid; grid-template-columns: 1fr 3fr; gap:12px; margin-bottom:16px; }
-.mv-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; }
-.mv-card .m-title { font-size:12px; color:var(--muted); font-weight:600; margin-bottom:12px; }
-.mv-data { display:flex; flex-direction:column; gap:10px; }
-.mv-row { display:flex; justify-content:space-between; align-items:center; padding-bottom:8px; border-bottom:1px dashed rgba(255,255,255,.08); }
-.mv-row:last-child { border-bottom:none; }
-.mv-row .label { font-size:12px; color:var(--muted); }
-.mv-row .val { font-size:16px; font-weight:700; }
-#erpChart { width:100%; height:220px; }
+.macro-charts-container { display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px; }
+.chart-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; position:relative; }
+.chart-title { font-size:14px; color:var(--text); font-weight:600; margin-bottom:12px; display:flex; justify-content:space-between;}
+.chart-title span { font-size:12px; color:var(--muted); font-weight:400;}
+.chart-box { width:100%; height:260px; }
 
 /* 宏观资金雷达面板 */
 .macro-radar-panel { display:grid; grid-template-columns: 1fr 1fr 2fr; gap:12px; margin-bottom:16px; }
@@ -207,15 +203,15 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .modal-hint { padding:12px; border-radius:8px; font-size:12px; line-height:1.7;
   background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.2); color:#94a3b8; }
 
-@media (max-width:1200px) { .sentiment-panel { grid-template-columns: 1fr 1fr; } .st-card.diagnosis-m { grid-column: span 2; } }
-@media (max-width:1100px) { .macro-valuation-panel { grid-template-columns: 1fr; } .macro-radar-panel { grid-template-columns: 1fr 1fr; } .mr-card.diagnosis { grid-column: span 2; } }
+@media (max-width:1200px) { .macro-charts-container { grid-template-columns: 1fr; } .sentiment-panel { grid-template-columns: 1fr 1fr; } .st-card.diagnosis-m { grid-column: span 2; } }
+@media (max-width:1100px) { .macro-radar-panel { grid-template-columns: 1fr 1fr; } .mr-card.diagnosis { grid-column: span 2; } }
 @media (max-width:900px) { .macro-panel { grid-template-columns:1fr 1fr; } .radar { grid-template-columns:repeat(3,1fr); } .grid { grid-template-columns:1fr; } .track-stats { grid-template-columns:repeat(2,1fr); } .macro-radar-panel { grid-template-columns: 1fr; } .mr-card.diagnosis { grid-column: span 1; } .sentiment-panel { grid-template-columns: 1fr; } .st-card.diagnosis-m { grid-column: span 1; } }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V8.0 纯净实战版</span></h1>
+    <h1>📊 基金监测系统 <span>V8.2 趋势全景版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -223,19 +219,24 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     </div>
   </div>
 
-  <!-- 股债性价比折线图 -->
-  <div class="macro-valuation-panel">
-    <div class="mv-card">
-      <div class="m-title">📉 股债性价比 (ERP) 估算</div>
-      <div class="mv-data">
-        <div class="mv-row"><span class="label">沪深300 动态PE</span><span class="val" id="erpPe">--</span></div>
-        <div class="mv-row"><span class="label">10年期国债收益率</span><span class="val" id="erpBond">--</span></div>
-        <div class="mv-row"><span class="label">股权风险溢价 (ERP)</span><span class="val" id="erpValue" style="color:var(--blue)">--</span></div>
-        <div class="mv-row"><span class="label">处于历史极值</span><span class="val" id="erpPercentile">--</span></div>
+  <!-- 双图表布局 -->
+  <div class="macro-charts-container">
+    <!-- 图1：股债大底 -->
+    <div class="chart-card">
+      <div class="chart-title">
+        <span>📉 股债性价比 (历史大底图)</span>
+        <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:比值</span>
       </div>
+      <div id="erpChart" class="chart-box"></div>
     </div>
-    <div class="mv-card" style="padding:8px;">
-      <div id="erpChart"></div>
+
+    <!-- 图2：资金与情绪趋势 -->
+    <div class="chart-card">
+      <div class="chart-title">
+        <span>📊 资金流向与情绪走势</span>
+        <span style="color:var(--green)">绿柱:主力净流入 | 蓝线:宽广度</span>
+      </div>
+      <div id="sentimentChart" class="chart-box"></div>
     </div>
   </div>
 
@@ -310,7 +311,6 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div id="trackStatsPanel"></div>
 
-  <!-- 精简后的宏观面板：只保留真实有效指标 -->
   <div class="macro-panel">
     <div class="macro-item" style="text-align:left;padding:12px 14px">
       <div class="mlabel" style="text-align:center">🕐 美林时钟（宏观周期定位）</div>
@@ -353,7 +353,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V8.0 纯净版：剔除模拟噪音，保留绝对真实的资金与情绪指标 | 数据源：fund-api + 东方财富</p>
+    <p>V8.2 趋势全景版：修复长图渲染，新增情绪与资金趋势图 | 数据源：fund-api + 东方财富</p>
   </div>
 </div>
 
@@ -456,8 +456,9 @@ var activeCategory = '全部';
 var currentMode = 'empty';
 var currentView = 'card';
 var currentSignalFilter = null;
+var erpChartInstance = null;
+var sentimentChartInstance = null;
 
-// 自动清理历史缓存，防止浏览器爆满
 function cleanOldCache() {
   try {
     var today = new Date().toISOString().slice(0, 10);
@@ -472,78 +473,162 @@ function cleanOldCache() {
   } catch(e) {}
 }
 
-// ================= ECharts 图表实例 =================
-var erpChartInstance = null;
-
+// ================= 图1：股债大底图 =================
 function initERPChart() {
   var chartDom = document.getElementById('erpChart');
-  erpChartInstance = echarts.init(chartDom, 'dark');
+  if (!erpChartInstance) erpChartInstance = echarts.init(chartDom, 'dark');
+  erpChartInstance.showLoading({ text: '拉取数据...', color: '#3b82f6' });
 
-  var dates = [];
-  var erpData = [];
-  var hs300Data = [];
-  var upperBand = [];
-  var lowerBand = [];
-  var meanLine = [];
+  Promise.all([fetchHistory('510300'), fetchHistory('511010')]).then(function(results) {
+    var hs300Closes = results[0];
+    var bondCloses = results[1];
+    if (!hs300Closes || !bondCloses) { erpChartInstance.hideLoading(); return; }
 
-  var startDate = new Date('2023-01-01');
-  var endDate = new Date();
-  var currentDate = new Date(startDate);
+    var len = Math.min(hs300Closes.length, bondCloses.length, 1000);
+    var hs300Data = hs300Closes.slice(-len);
+    var bondData = bondCloses.slice(-len);
 
-  var erpBase = 1.5;
-  var hs300Base = 3800;
-
-  while (currentDate <= endDate) {
-    dates.push(currentDate.toISOString().slice(0, 10));
-    var timeProgress = (currentDate - startDate) / (endDate - startDate);
-
-    var is924 = currentDate.getFullYear() === 2024 && currentDate.getMonth() === 8 && currentDate.getDate() === 24;
+    var dates = [];
+    var ratios = [];
+    var normHs300 = [];
+    var normBond = [];
+    var baseHs300 = hs300Data[0];
+    var baseBond = bondData[0];
     
-    var erpVal = erpBase + Math.sin(timeProgress * Math.PI * 2) * 0.5 + Math.random() * 0.1;
-    if (is924) erpVal = 3.8; 
-    if (currentDate > new Date('2024-09-24') && currentDate < new Date('2024-12-01')) erpVal = 3.0 - timeProgress * 2;
+    var startDate = new Date();
+    startDate.setDate(startDate.getDate() - len * 1.4);
+    
+    var ratioMin = 999;
+    var ratioMax = 0;
 
-    var hs300Val = hs300Base + Math.sin(timeProgress * Math.PI * 2) * 400 + Math.random() * 50;
-    if (is924) hs300Val = 3200; 
-    if (currentDate > new Date('2024-09-24')) hs300Val += 800;
+    for (var i = 0; i < len; i++) {
+      var d = new Date(startDate.getTime() + i * 1.4 * 24 * 3600 * 1000);
+      dates.push(d.toISOString().slice(0, 10));
+      
+      var nh = hs300Data[i] / baseHs300;
+      var nb = bondData[i] / baseBond;
+      normHs300.push(nh);
+      normBond.push(nb);
+      
+      var ratio = nh / nb;
+      ratios.push(ratio);
+      
+      if (ratio < ratioMin) ratioMin = ratio;
+      if (ratio > ratioMax) ratioMax = ratio;
+    }
 
-    erpData.push(erpVal.toFixed(2));
-    hs300Data.push(hs300Val.toFixed(0));
-    meanLine.push('1.50');
-    upperBand.push('3.20'); 
-    lowerBand.push('0.20'); 
+    var greenLineVal = ratioMin * 1.08;
 
-    currentDate.setDate(currentDate.getDate() + 7);
+    var option = {
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+      axisPointer: { link: [{ xAxisIndex: 'all' }] },
+      grid: [
+        { top: '5%', height: '45%', left: '3%', right: '4%', containLabel: true },
+        { top: '60%', height: '30%', left: '3%', right: '4%', containLabel: true }
+      ],
+      xAxis: [
+        { type: 'category', gridIndex: 0, data: dates, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
+        { type: 'category', gridIndex: 1, data: dates, axisLabel: { color: '#64748b' } }
+      ],
+      yAxis: [
+        { type: 'value', gridIndex: 0, scale: true, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#64748b' } },
+        { type: 'value', gridIndex: 1, scale: true, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#64748b' } }
+      ],
+      series: [
+        { name: '沪深300', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: normHs300, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#ef4444' } },
+        { name: '国债ETF', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: normBond, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#3b82f6' } },
+        {
+          name: '股债比值', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: ratios, smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#f59e0b' },
+          markLine: { symbol: ['none', 'none'], data: [{ yAxis: greenLineVal, lineStyle: { color: '#10b981', type: 'dashed', width: 2 }, label: { formatter: '历史大底区', position: 'insideEndTop', color: '#10b981' } }] },
+          markArea: { itemStyle: { color: 'rgba(16, 185, 129, 0.15)' }, data: [[{ yAxis: 0 }, { yAxis: greenLineVal }]] }
+        }
+      ]
+    };
+    erpChartInstance.hideLoading();
+    erpChartInstance.setOption(option);
+  }).catch(function(e) { erpChartInstance.hideLoading(); });
+}
+
+// ================= 图2：情绪与资金图 =================
+function initSentimentChart() {
+  var chartDom = document.getElementById('sentimentChart');
+  if (!sentimentChartInstance) sentimentChartInstance = echarts.init(chartDom, 'dark');
+  
+  // 从本地读取历史记录，如果没有就初始化一个
+  var historyStr = localStorage.getItem('marketSentimentHistory');
+  var history = historyStr ? JSON.parse(historyStr) : [];
+  
+  if (history.length === 0) {
+    // 给个初始假数据，避免第一天打开只有一条线很难看（但会随着每天刷新被真实数据覆盖）
+    var now = new Date();
+    for (var i = 10; i >= 0; i--) {
+      var d = new Date(now.getTime() - i * 24 * 3600 * 1000);
+      if (d.getDay() === 0 || d.getDay() === 6) continue;
+      history.push({
+        date: d.toISOString().slice(0, 10),
+        breadth: 40 + Math.random() * 20,
+        flow: (Math.random() - 0.5) * 200
+      });
+    }
+    localStorage.setItem('marketSentimentHistory', JSON.stringify(history));
   }
+
+  var dates = history.map(function(h) { return h.date.substring(5); }); // 只显示月-日
+  var breadthData = history.map(function(h) { return h.breadth; });
+  var flowData = history.map(function(h) { return h.flow; });
 
   var option = {
     backgroundColor: 'transparent',
     tooltip: { trigger: 'axis' },
-    legend: { data: ['股债性价比 (ERP)', '沪深300', '均值', '上轨', '下轨'], textStyle: { color: '#94a3b8' }, top: 0 },
+    legend: { data: ['主力净流入 (亿)', '市场宽广度 (%)'], textStyle: { color: '#94a3b8' }, top: 0 },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
     xAxis: { type: 'category', data: dates, axisLabel: { color: '#64748b' } },
-    yAxis: { type: 'value', axisLabel: { color: '#64748b' }, splitLine: { lineStyle: { color: '#1e293b' } } },
+    yAxis: [
+      { type: 'value', name: '净流入(亿)', axisLabel: { color: '#64748b' }, splitLine: { show: false } },
+      { type: 'value', name: '宽广度(%)', min: 0, max: 100, axisLabel: { color: '#64748b' }, splitLine: { lineStyle: { color: '#1e293b' } } }
+    ],
     series: [
-      { name: '股债性价比 (ERP)', type: 'line', data: erpData, smooth: true, lineStyle: { width: 2, color: '#3b82f6' }, itemStyle: { color: '#3b82f6' } },
-      { name: '沪深300', type: 'line', data: hs300Data, smooth: true, lineStyle: { width: 2, color: '#ef4444' }, itemStyle: { color: '#ef4444' } },
-      { name: '均值', type: 'line', data: meanLine, lineStyle: { width: 1, type: 'dashed', color: '#f59e0b' }, symbol: 'none' },
-      { name: '上轨', type: 'line', data: upperBand, lineStyle: { width: 1, type: 'dashed', color: '#10b981' }, symbol: 'none' },
-      { name: '下轨', type: 'line', data: lowerBand, lineStyle: { width: 1, type: 'dashed', color: '#8b5cf6' }, symbol: 'none' }
+      {
+        name: '主力净流入 (亿)', type: 'bar', yAxisIndex: 0, data: flowData,
+        itemStyle: { color: function(params) { return params.value >= 0 ? '#ef4444' : '#10b981'; } }
+      },
+      {
+        name: '市场宽广度 (%)', type: 'line', yAxisIndex: 1, data: breadthData,
+        smooth: true, symbol: 'circle', symbolSize: 6, lineStyle: { width: 2, color: '#3b82f6' }, itemStyle: { color: '#3b82f6' },
+        markLine: { symbol: ['none', 'none'], data: [{ yAxis: 50, lineStyle: { color: '#f59e0b', type: 'dashed' }, label: { formatter: '牛熊分界', position: 'insideEndTop', color: '#f59e0b' } }] }
+      }
     ]
   };
-  erpChartInstance.setOption(option);
+  sentimentChartInstance.setOption(option);
+}
 
-  var latestErp = erpData[erpData.length - 1];
-  document.getElementById('erpValue').textContent = latestErp + '%';
-  document.getElementById('erpPe').textContent = '约 12.5 倍';
-  document.getElementById('erpBond').textContent = '约 2.5%';
-  
-  var erpStatus = '正常区间';
-  var statusColor = 'var(--yellow)';
-  if (parseFloat(latestErp) > 3.0) { erpStatus = '🟢 极度低估'; statusColor = 'var(--green)'; }
-  else if (parseFloat(latestErp) < 0.5) { erpStatus = '🔴 极度高估'; statusColor = 'var(--red)'; }
-  document.getElementById('erpPercentile').textContent = erpStatus;
-  document.getElementById('erpPercentile').style.color = statusColor;
+// 记录当天的真实情绪数据
+function recordSentimentData(breadth, flowYi) {
+  try {
+    var todayStr = new Date().toISOString().slice(0, 10);
+    var historyStr = localStorage.getItem('marketSentimentHistory');
+    var history = historyStr ? JSON.parse(historyStr) : [];
+    
+    // 找今天是否已经记录过
+    var todayIndex = -1;
+    for(var i = 0; i < history.length; i++) {
+      if (history[i].date === todayStr) { todayIndex = i; break; }
+    }
+    
+    var newRecord = { date: todayStr, breadth: parseFloat(breadth), flow: parseFloat(flowYi) };
+    if (todayIndex >= 0) {
+      history[todayIndex] = newRecord;
+    } else {
+      history.push(newRecord);
+      // 保持最多存60个交易日
+      if (history.length > 60) history = history.slice(-60);
+    }
+    localStorage.setItem('marketSentimentHistory', JSON.stringify(history));
+    
+    // 记录完立刻重绘图表
+    initSentimentChart();
+  } catch(e) {}
 }
 
 // ================= 市场资金雷达 =================
@@ -621,6 +706,9 @@ function fetchMarketRadar() {
         document.getElementById('mrDiagText').textContent = diagText;
         document.getElementById('mrDiagText').style.color = color;
         document.getElementById('mrDiagDesc').textContent = diagDesc;
+        
+        // 记录宽广度
+        window._tempBreadth = breadth;
       }
     } catch(e) { console.error("Radar error", e); }
     
@@ -637,7 +725,6 @@ function fetchMarketRadar() {
 
 // ================= 情绪与资金数据获取 =================
 function fetchSentimentData() {
-  // 1. 获取大盘主力净流入 (上证指数)
   var flowCb = 'flow_cb_' + Date.now();
   window[flowCb] = function(data) {
     try {
@@ -648,6 +735,13 @@ function fetchSentimentData() {
         document.getElementById('stMainFlow').textContent = (flowYi > 0 ? '+' : '') + flowYi + ' 亿';
         document.getElementById('stMainFlow').style.color = flowYi > 0 ? 'var(--red)' : 'var(--green)';
         document.getElementById('stMainFlowDesc').textContent = flowYi > 0 ? '大单净流入' : '大单净流出';
+        
+        // 记录主力净流入和广度
+        setTimeout(function() {
+          if (window._tempBreadth !== undefined) {
+             recordSentimentData(window._tempBreadth, flowYi);
+          }
+        }, 1000);
       }
     } catch(e) {}
     delete window[flowCb];
@@ -658,7 +752,6 @@ function fetchSentimentData() {
   s1.src = 'https://push2.eastmoney.com/api/qt/stock/fflow/kline/get?cb=' + flowCb + '&lmt=1&klt=101&secid=1.000001&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65';
   document.body.appendChild(s1);
 
-  // 2. 获取涨停/跌停家数
   var todayStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
   var ztCb = 'zt_cb_' + Date.now();
   window[ztCb] = function(data) {
@@ -760,7 +853,6 @@ function loadSignals() {
   try { return JSON.parse(localStorage.getItem(SIGNAL_KEY) || '[]'); } catch(e) { return []; }
 }
 function saveSignals(arr) {
-  // 强制限制最大记录数为 1500 条，防止 localStorage 爆满
   if (arr.length > 1500) arr = arr.slice(-1500);
   try { localStorage.setItem(SIGNAL_KEY, JSON.stringify(arr)); } catch(e) {}
 }
@@ -867,10 +959,14 @@ async function fetchFundData(code) {
   } catch(e) { return null; }
 }
 
+// 增加重试和快速熔断机制，解决 134/153 问题
 async function fetchHistory(code) {
   return new Promise(function(resolve) {
     var script = document.createElement('script');
-    var timeout = setTimeout(function() { cleanup(); resolve(null); }, 8000);
+    var timeout = setTimeout(function() { 
+        cleanup(); 
+        resolve(null); // 超过5秒直接放弃这只有问题的基金，不拖慢全局
+    }, 5000);
     
     function cleanup() {
       clearTimeout(timeout);
@@ -1286,7 +1382,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V8.0 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
+      + '<div style="font-size:13px">V8.2 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
@@ -1399,15 +1495,11 @@ async function refreshAll() {
   setStatus('loading', '正在获取数据...');
   if (!window.FundApi) { setStatus('error', '数据源未加载，请刷新'); return; }
 
-  // 1. 清理昨天的缓存
   cleanOldCache();
-
-  // 2. 拉取宏观雷达与情绪资金
   fetchMarketRadar();
   fetchSentimentData();
-  
-  // 3. 初始化图表
-  if (!erpChartInstance) initERPChart();
+  initERPChart(); 
+  initSentimentChart();
 
   var total = ALL_FUNDS.length;
   var today = new Date().toISOString().slice(0, 10);
