@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V8.2 | 趋势全景版</title>
+<title>基金监测系统 V8.4 | 十年大底与极值标注</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -33,7 +33,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .chart-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; position:relative; }
 .chart-title { font-size:14px; color:var(--text); font-weight:600; margin-bottom:12px; display:flex; justify-content:space-between;}
 .chart-title span { font-size:12px; color:var(--muted); font-weight:400;}
-.chart-box { width:100%; height:260px; }
+.chart-box { width:100%; height:320px; } /* 图表高度增加到320px */
 
 /* 宏观资金雷达面板 */
 .macro-radar-panel { display:grid; grid-template-columns: 1fr 1fr 2fr; gap:12px; margin-bottom:16px; }
@@ -211,7 +211,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V8.2 趋势全景版</span></h1>
+    <h1>📊 基金监测系统 <span>V8.4 十年大底与极值标注</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -224,8 +224,8 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     <!-- 图1：股债大底 -->
     <div class="chart-card">
       <div class="chart-title">
-        <span>📉 股债性价比 (历史大底图)</span>
-        <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:比值</span>
+        <span>📉 股债性价比 (10年历史大底)</span>
+        <span style="color:var(--red)">自动标注大周期波峰波谷(保留3位小数)</span>
       </div>
       <div id="erpChart" class="chart-box"></div>
     </div>
@@ -234,7 +234,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     <div class="chart-card">
       <div class="chart-title">
         <span>📊 资金流向与情绪走势</span>
-        <span style="color:var(--green)">绿柱:主力净流入 | 蓝线:宽广度</span>
+        <span style="color:var(--green)">鼠标悬停柱状图看各大指数涨跌</span>
       </div>
       <div id="sentimentChart" class="chart-box"></div>
     </div>
@@ -353,7 +353,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V8.2 趋势全景版：修复长图渲染，新增情绪与资金趋势图 | 数据源：fund-api + 东方财富</p>
+    <p>V8.4 十年大底版：拉长历史周期，自动标注高低点 | 数据源：fund-api + 东方财富</p>
   </div>
 </div>
 
@@ -473,40 +473,51 @@ function cleanOldCache() {
   } catch(e) {}
 }
 
-// ================= 图1：股债大底图 =================
+// ================= 图1：股债大底图（10年周期 + 极值标注 + 3位小数） =================
 function initERPChart() {
   var chartDom = document.getElementById('erpChart');
   if (!erpChartInstance) erpChartInstance = echarts.init(chartDom, 'dark');
-  erpChartInstance.showLoading({ text: '拉取数据...', color: '#3b82f6' });
+  erpChartInstance.showLoading({ text: '拉取10年数据...', color: '#3b82f6' });
 
-  Promise.all([fetchHistory('510300'), fetchHistory('511010')]).then(function(results) {
-    var hs300Closes = results[0];
-    var bondCloses = results[1];
-    if (!hs300Closes || !bondCloses) { erpChartInstance.hideLoading(); return; }
-
-    var len = Math.min(hs300Closes.length, bondCloses.length, 1000);
-    var hs300Data = hs300Closes.slice(-len);
-    var bondData = bondCloses.slice(-len);
+  Promise.all([fetchHistory('510300', true), fetchHistory('511010', true)]).then(function(results) {
+    var hs300DataRaw = results[0];
+    var bondDataRaw = results[1];
+    if (!hs300DataRaw || !bondDataRaw) { erpChartInstance.hideLoading(); return; }
 
     var dates = [];
     var ratios = [];
     var normHs300 = [];
     var normBond = [];
-    var baseHs300 = hs300Data[0];
-    var baseBond = bondData[0];
+
+    // 拉长到 10 年，约 2500 个交易日
+    var len = Math.min(hs300DataRaw.length, bondDataRaw.length, 2500);
+    var startIdx = hs300DataRaw.length - len; 
     
-    var startDate = new Date();
-    startDate.setDate(startDate.getDate() - len * 1.4);
+    var baseHs300 = hs300DataRaw[startIdx].val;
+    var baseBond = bondDataRaw[bondDataRaw.length - len].val;
     
+    var bondDict = {};
+    bondDataRaw.forEach(function(item) { bondDict[item.date] = item.val; });
+
     var ratioMin = 999;
     var ratioMax = 0;
+    
+    // 极值标注用的数据
+    var markData = [];
+    var peaks = [];
+    var troughs = [];
 
-    for (var i = 0; i < len; i++) {
-      var d = new Date(startDate.getTime() + i * 1.4 * 24 * 3600 * 1000);
-      dates.push(d.toISOString().slice(0, 10));
+    for (var i = startIdx; i < hs300DataRaw.length; i++) {
+      var item = hs300DataRaw[i];
+      var dStr = item.date;
+      if (!bondDict[dStr]) continue;
       
-      var nh = hs300Data[i] / baseHs300;
-      var nb = bondData[i] / baseBond;
+      var bVal = bondDict[dStr];
+      dates.push(dStr);
+      
+      var nh = item.val / baseHs300;
+      var nb = bVal / baseBond;
+      
       normHs300.push(nh);
       normBond.push(nb);
       
@@ -517,11 +528,55 @@ function initERPChart() {
       if (ratio > ratioMax) ratioMax = ratio;
     }
 
-    var greenLineVal = ratioMin * 1.08;
+    // ======= 波段极值探测算法（找近10年的大底和大顶） =======
+    // 简化版：遍历所有点，如果它比前30天都低，且比后30天都低，算作一个大底；反之为大顶
+    var windowSize = 30;
+    for (var j = windowSize; j < ratios.length - windowSize; j++) {
+        var isTrough = true;
+        var isPeak = true;
+        for (var k = 1; k <= windowSize; k++) {
+            if (ratios[j] > ratios[j-k] || ratios[j] > ratios[j+k]) isTrough = false;
+            if (ratios[j] < ratios[j-k] || ratios[j] < ratios[j+k]) isPeak = false;
+        }
+        if (isTrough) troughs.push({ date: dates[j], val: ratios[j], index: j });
+        if (isPeak) peaks.push({ date: dates[j], val: ratios[j], index: j });
+    }
+
+    // 为了防止图太乱，最多取前后各3个大底和3个大顶
+    var finalTroughs = troughs.slice(-3);
+    var finalPeaks = peaks.slice(-3);
+
+    finalTroughs.forEach(function(t) {
+        markData.push({ 
+            name: '大底', 
+            coord: [t.date, t.val], 
+            value: t.val.toFixed(3),
+            itemStyle: { color: '#10b981' },
+            label: { formatter: '{c}', position: 'bottom', color: '#10b981', fontWeight: 'bold' }
+        });
+    });
+    
+    finalPeaks.forEach(function(p) {
+        markData.push({ 
+            name: '大顶', 
+            coord: [p.date, p.val], 
+            value: p.val.toFixed(3),
+            itemStyle: { color: '#ef4444' },
+            label: { formatter: '{c}', position: 'top', color: '#ef4444', fontWeight: 'bold' }
+        });
+    });
+
+    var greenLineVal = ratioMin * 1.05;
 
     var option = {
       backgroundColor: 'transparent',
-      tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+      tooltip: { 
+          trigger: 'axis', 
+          axisPointer: { type: 'cross' },
+          valueFormatter: function (value) {
+              return value ? parseFloat(value).toFixed(3) : ''; // 强制3位小数
+          }
+      },
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
       grid: [
         { top: '5%', height: '45%', left: '3%', right: '4%', containLabel: true },
@@ -529,19 +584,27 @@ function initERPChart() {
       ],
       xAxis: [
         { type: 'category', gridIndex: 0, data: dates, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
-        { type: 'category', gridIndex: 1, data: dates, axisLabel: { color: '#64748b' } }
+        { type: 'category', gridIndex: 1, data: dates, axisLabel: { color: '#64748b', interval: 200 } } // 10年数据X轴仅显示部分
       ],
       yAxis: [
-        { type: 'value', gridIndex: 0, scale: true, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#64748b' } },
-        { type: 'value', gridIndex: 1, scale: true, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#64748b' } }
+        { type: 'value', gridIndex: 0, scale: true, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#64748b', formatter: function(v){ return v.toFixed(2); } } },
+        { type: 'value', gridIndex: 1, scale: true, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#64748b', formatter: function(v){ return v.toFixed(2); } } }
       ],
       series: [
         { name: '沪深300', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: normHs300, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#ef4444' } },
         { name: '国债ETF', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: normBond, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#3b82f6' } },
         {
           name: '股债比值', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: ratios, smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#f59e0b' },
-          markLine: { symbol: ['none', 'none'], data: [{ yAxis: greenLineVal, lineStyle: { color: '#10b981', type: 'dashed', width: 2 }, label: { formatter: '历史大底区', position: 'insideEndTop', color: '#10b981' } }] },
-          markArea: { itemStyle: { color: 'rgba(16, 185, 129, 0.15)' }, data: [[{ yAxis: 0 }, { yAxis: greenLineVal }]] }
+          markPoint: {
+              symbol: 'circle',
+              symbolSize: 8,
+              data: markData
+          },
+          markLine: { 
+              symbol: ['none', 'none'], 
+              data: [{ yAxis: greenLineVal, lineStyle: { color: '#10b981', type: 'dashed', width: 2 }, label: { formatter: '历史大底区', position: 'insideEndTop', color: '#10b981' } }] 
+          },
+          markArea: { itemStyle: { color: 'rgba(16, 185, 129, 0.1)' }, data: [[{ yAxis: 0 }, { yAxis: greenLineVal }]] }
         }
       ]
     };
@@ -555,12 +618,10 @@ function initSentimentChart() {
   var chartDom = document.getElementById('sentimentChart');
   if (!sentimentChartInstance) sentimentChartInstance = echarts.init(chartDom, 'dark');
   
-  // 从本地读取历史记录，如果没有就初始化一个
   var historyStr = localStorage.getItem('marketSentimentHistory');
   var history = historyStr ? JSON.parse(historyStr) : [];
   
   if (history.length === 0) {
-    // 给个初始假数据，避免第一天打开只有一条线很难看（但会随着每天刷新被真实数据覆盖）
     var now = new Date();
     for (var i = 10; i >= 0; i--) {
       var d = new Date(now.getTime() - i * 24 * 3600 * 1000);
@@ -568,19 +629,47 @@ function initSentimentChart() {
       history.push({
         date: d.toISOString().slice(0, 10),
         breadth: 40 + Math.random() * 20,
-        flow: (Math.random() - 0.5) * 200
+        flow: (Math.random() - 0.5) * 200,
+        indices: { sh:'0.00', sz:'0.00', cyb:'0.00', kc:'0.00', bz:'0.00' }
       });
     }
     localStorage.setItem('marketSentimentHistory', JSON.stringify(history));
   }
 
-  var dates = history.map(function(h) { return h.date.substring(5); }); // 只显示月-日
+  var dates = history.map(function(h) { return h.date.substring(5); });
   var breadthData = history.map(function(h) { return h.breadth; });
   var flowData = history.map(function(h) { return h.flow; });
 
   var option = {
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis' },
+    tooltip: { 
+        trigger: 'axis',
+        formatter: function (params) {
+            var idx = params[0].dataIndex;
+            var h = history[idx];
+            
+            var html = '<div style="font-weight:bold;margin-bottom:8px;font-size:14px;">' + h.date + '</div>';
+            
+            // 指数涨跌幅
+            html += '<div style="font-size:12px;margin-bottom:8px;line-height:1.6;border-bottom:1px dashed rgba(255,255,255,0.2);padding-bottom:8px;">';
+            if (h.indices) {
+                html += '上证: <span style="color:' + (h.indices.sh >= 0 ? '#ef4444' : '#10b981') + '">' + (h.indices.sh > 0 ? '+' : '') + h.indices.sh + '%</span> | ';
+                html += '深证: <span style="color:' + (h.indices.sz >= 0 ? '#ef4444' : '#10b981') + '">' + (h.indices.sz > 0 ? '+' : '') + h.indices.sz + '%</span><br/>';
+                html += '创业板: <span style="color:' + (h.indices.cyb >= 0 ? '#ef4444' : '#10b981') + '">' + (h.indices.cyb > 0 ? '+' : '') + h.indices.cyb + '%</span> | ';
+                html += '科创50: <span style="color:' + (h.indices.kc >= 0 ? '#ef4444' : '#10b981') + '">' + (h.indices.kc > 0 ? '+' : '') + h.indices.kc + '%</span><br/>';
+                html += '北证50: <span style="color:' + (h.indices.bz >= 0 ? '#ef4444' : '#10b981') + '">' + (h.indices.bz > 0 ? '+' : '') + h.indices.bz + '%</span>';
+            }
+            html += '</div>';
+            
+            // 资金和广度
+            html += '<div style="font-size:12px;line-height:1.6;">';
+            html += '主力净流入: <strong style="color:' + (h.flow >= 0 ? '#ef4444' : '#10b981') + '">' + h.flow + ' 亿</strong><br/>';
+            html += '市场宽广度: <strong style="color:#3b82f6">' + h.breadth.toFixed(1) + '%</strong>';
+            html += '</div>';
+            
+            return html;
+        }
+    },
     legend: { data: ['主力净流入 (亿)', '市场宽广度 (%)'], textStyle: { color: '#94a3b8' }, top: 0 },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
     xAxis: { type: 'category', data: dates, axisLabel: { color: '#64748b' } },
@@ -604,29 +693,26 @@ function initSentimentChart() {
 }
 
 // 记录当天的真实情绪数据
-function recordSentimentData(breadth, flowYi) {
+function recordSentimentData(breadth, flowYi, indicesData) {
   try {
     var todayStr = new Date().toISOString().slice(0, 10);
     var historyStr = localStorage.getItem('marketSentimentHistory');
     var history = historyStr ? JSON.parse(historyStr) : [];
     
-    // 找今天是否已经记录过
     var todayIndex = -1;
     for(var i = 0; i < history.length; i++) {
       if (history[i].date === todayStr) { todayIndex = i; break; }
     }
     
-    var newRecord = { date: todayStr, breadth: parseFloat(breadth), flow: parseFloat(flowYi) };
+    var newRecord = { date: todayStr, breadth: parseFloat(breadth), flow: parseFloat(flowYi), indices: indicesData };
     if (todayIndex >= 0) {
       history[todayIndex] = newRecord;
     } else {
       history.push(newRecord);
-      // 保持最多存60个交易日
       if (history.length > 60) history = history.slice(-60);
     }
     localStorage.setItem('marketSentimentHistory', JSON.stringify(history));
     
-    // 记录完立刻重绘图表
     initSentimentChart();
   } catch(e) {}
 }
@@ -640,12 +726,16 @@ function fetchMarketRadar() {
         var diff = data.data.diff;
         var shUp = 0, shDown = 0, szUp = 0, szDown = 0, totalAmt = 0;
         var sh50Pct = 0, zz1000Pct = 0;
+        var indicesData = { sh: 0, sz: 0, cyb: 0, kc: 0, bz: 0 };
         
         diff.forEach(function(item) {
-          if (item.f12 === '000001') { shUp = item.f104; shDown = item.f105; totalAmt += item.f6; }
-          if (item.f12 === '399001') { szUp = item.f104; szDown = item.f105; totalAmt += item.f6; }
+          if (item.f12 === '000001') { shUp = item.f104; shDown = item.f105; totalAmt += item.f6; indicesData.sh = item.f3; }
+          if (item.f12 === '399001') { szUp = item.f104; szDown = item.f105; totalAmt += item.f6; indicesData.sz = item.f3; }
           if (item.f12 === '000016') { sh50Pct = item.f3; }
           if (item.f12 === '000852') { zz1000Pct = item.f3; }
+          if (item.f12 === '399006') { indicesData.cyb = item.f3; }
+          if (item.f12 === '000688') { indicesData.kc = item.f3; }
+          if (item.f12 === '899050') { indicesData.bz = item.f3; }
         });
         
         var totalUp = shUp + szUp;
@@ -707,8 +797,8 @@ function fetchMarketRadar() {
         document.getElementById('mrDiagText').style.color = color;
         document.getElementById('mrDiagDesc').textContent = diagDesc;
         
-        // 记录宽广度
         window._tempBreadth = breadth;
+        window._tempIndices = indicesData;
       }
     } catch(e) { console.error("Radar error", e); }
     
@@ -719,7 +809,7 @@ function fetchMarketRadar() {
   
   var script = document.createElement('script');
   script.id = cbName;
-  script.src = 'https://push2.eastmoney.com/api/qt/ulist.np/get?cb=' + cbName + '&secids=1.000001,0.399001,1.000016,1.000852,0.399006&fields=f2,f3,f6,f12,f14,f104,f105,f106';
+  script.src = 'https://push2.eastmoney.com/api/qt/ulist.np/get?cb=' + cbName + '&secids=1.000001,0.399001,1.000016,1.000852,0.399006,1.000688,0.899050&fields=f2,f3,f6,f12,f14,f104,f105,f106';
   document.body.appendChild(script);
 }
 
@@ -736,10 +826,9 @@ function fetchSentimentData() {
         document.getElementById('stMainFlow').style.color = flowYi > 0 ? 'var(--red)' : 'var(--green)';
         document.getElementById('stMainFlowDesc').textContent = flowYi > 0 ? '大单净流入' : '大单净流出';
         
-        // 记录主力净流入和广度
         setTimeout(function() {
-          if (window._tempBreadth !== undefined) {
-             recordSentimentData(window._tempBreadth, flowYi);
+          if (window._tempBreadth !== undefined && window._tempIndices !== undefined) {
+             recordSentimentData(window._tempBreadth, flowYi, window._tempIndices);
           }
         }, 1000);
       }
@@ -959,13 +1048,13 @@ async function fetchFundData(code) {
   } catch(e) { return null; }
 }
 
-// 增加重试和快速熔断机制，解决 134/153 问题
-async function fetchHistory(code) {
+// 带日期历史拉取
+async function fetchHistory(code, withDate = false) {
   return new Promise(function(resolve) {
     var script = document.createElement('script');
     var timeout = setTimeout(function() { 
         cleanup(); 
-        resolve(null); // 超过5秒直接放弃这只有问题的基金，不拖慢全局
+        resolve(null); 
     }, 5000);
     
     function cleanup() {
@@ -981,7 +1070,11 @@ async function fetchHistory(code) {
         if (typeof window.Data_netWorthTrend !== 'undefined' && Array.isArray(window.Data_netWorthTrend) && window.Data_netWorthTrend.length > 10) {
           var data = window.Data_netWorthTrend;
           window.Data_netWorthTrend = null;
-          resolve(data.map(function(d) { return d.y; }));
+          if (withDate) {
+            resolve(data.map(function(d) { return { date: new Date(d.x).toISOString().slice(0,10), val: d.y }; }));
+          } else {
+            resolve(data.map(function(d) { return d.y; }));
+          }
         } else {
           resolve(null);
         }
@@ -1382,7 +1475,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V8.2 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
+      + '<div style="font-size:13px">V8.4 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
