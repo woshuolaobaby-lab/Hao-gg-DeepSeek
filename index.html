@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V8.8 | 极简精准版</title>
+<title>基金监测系统 V8.9 | 上下全景版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -28,12 +28,24 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
   background:var(--card); color:var(--text); font-size:12px; cursor:pointer; transition:all .2s; }
 .btn:hover { border-color:var(--blue); }
 
-/* 宏观估值面板 */
-.macro-charts-container { display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px; }
+/* 宏观估值面板 (上下排布) */
+.macro-charts-container { display:grid; grid-template-columns: 1fr; gap:16px; margin-bottom:16px; }
 .chart-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; position:relative; }
 .chart-title { font-size:14px; color:var(--text); font-weight:600; margin-bottom:12px; display:flex; justify-content:space-between;}
 .chart-title span { font-size:12px; color:var(--muted); font-weight:400;}
-.chart-box { width:100%; height:320px; }
+.chart-box-erp { width:100%; height:380px; }
+.chart-box-sentiment { width:100%; height:260px; }
+
+/* 悬浮提示框 */
+.floating-badge {
+    position: absolute; top: 60px; left: 30px;
+    background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.1);
+    padding: 12px 16px; border-radius: 8px; backdrop-filter: blur(4px);
+    pointer-events: none; z-index: 10;
+}
+.floating-badge .f-title { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.floating-badge .f-val { font-size: 24px; font-weight: 800; color: var(--yellow); margin-bottom: 4px; }
+.floating-badge .f-desc { font-size: 13px; font-weight: 600; }
 
 /* 宏观资金雷达面板 */
 .macro-radar-panel { display:grid; grid-template-columns: 1fr 1fr 2fr; gap:12px; margin-bottom:16px; }
@@ -203,7 +215,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .modal-hint { padding:12px; border-radius:8px; font-size:12px; line-height:1.7;
   background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.2); color:#94a3b8; }
 
-@media (max-width:1200px) { .macro-charts-container { grid-template-columns: 1fr; } .sentiment-panel { grid-template-columns: 1fr 1fr; } .st-card.diagnosis-m { grid-column: span 2; } }
+@media (max-width:1200px) { .sentiment-panel { grid-template-columns: 1fr 1fr; } .st-card.diagnosis-m { grid-column: span 2; } }
 @media (max-width:1100px) { .macro-radar-panel { grid-template-columns: 1fr 1fr; } .mr-card.diagnosis { grid-column: span 2; } }
 @media (max-width:900px) { .macro-panel { grid-template-columns:1fr 1fr; } .radar { grid-template-columns:repeat(3,1fr); } .grid { grid-template-columns:1fr; } .track-stats { grid-template-columns:repeat(2,1fr); } .macro-radar-panel { grid-template-columns: 1fr; } .mr-card.diagnosis { grid-column: span 1; } .sentiment-panel { grid-template-columns: 1fr; } .st-card.diagnosis-m { grid-column: span 1; } }
 </style>
@@ -211,7 +223,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V8.8 极简精准版</span></h1>
+    <h1>📊 基金监测系统 <span>V8.9 上下全景版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -219,24 +231,30 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     </div>
   </div>
 
-  <!-- 双图表布局 -->
+  <!-- 宏观图表面板 (上下排布) -->
   <div class="macro-charts-container">
-    <!-- 图1：股债大底 (真实宏观数据) -->
+    <!-- 图1：股债性价比 (独占一行) -->
     <div class="chart-card">
       <div class="chart-title">
-        <span>📉 股债性价比 (10年历史大底)</span>
-        <span style="color:var(--red)">仅显示最新点位(保留3位小数)</span>
+        <span>📉 股债性价比 (15年历史大底与高估线)</span>
+        <span style="color:var(--red)">红线:高估预警 | 绿线:历史大底 | 仅保留当前点位(3位小数)</span>
       </div>
-      <div id="erpChart" class="chart-box"></div>
+      <!-- 悬浮提示框 -->
+      <div class="floating-badge" id="erpFloatingBadge">
+        <div class="f-title">当前股债比位置</div>
+        <div class="f-val" id="fbVal">--</div>
+        <div class="f-desc" id="fbDesc" style="color:var(--yellow)">正在计算...</div>
+      </div>
+      <div id="erpChart" class="chart-box-erp"></div>
     </div>
 
-    <!-- 图2：资金与情绪趋势 (近1个月) -->
+    <!-- 图2：资金流向 (独占一行，拉宽) -->
     <div class="chart-card">
       <div class="chart-title">
         <span>📊 资金流向与情绪走势 (近1个月)</span>
-        <span style="color:var(--green)">悬浮看各大指数涨跌幅(2位小数)</span>
+        <span style="color:var(--green)">鼠标悬浮柱状图看各大指数涨跌幅(一行一个)</span>
       </div>
-      <div id="sentimentChart" class="chart-box"></div>
+      <div id="sentimentChart" class="chart-box-sentiment"></div>
     </div>
   </div>
 
@@ -353,7 +371,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V8.8 极简精准版：图1仅保留最新点，图2强制格式化涨跌幅 | 数据源：fund-api + 东方财富</p>
+    <p>V8.9 上下全景版：上下双图布局，图1自带当前股债比提示框 | 数据源：fund-api + 东方财富</p>
   </div>
 </div>
 
@@ -470,17 +488,17 @@ function cleanOldCache() {
       }
     }
     keysToRemove.forEach(function(k) { localStorage.removeItem(k); });
-    // 强制清空旧的情绪历史缓存，防止旧的数据格式导致乱码
-    localStorage.removeItem('marketSentimentHistory');
+    localStorage.removeItem('marketSentimentHistory'); // 清空历史，防止旧格式干扰
   } catch(e) {}
 }
 
-// ================= 图1：股债大底图（仅标注最新点位 + 加宽绿色大底区） =================
+// ================= 图1：股债大底图（15年历史 + 上下轨 + 当前悬浮） =================
 function initERPChart() {
   var chartDom = document.getElementById('erpChart');
   if (!erpChartInstance) erpChartInstance = echarts.init(chartDom, 'dark');
-  erpChartInstance.showLoading({ text: '拉取10年历史数据...', color: '#3b82f6' });
+  erpChartInstance.showLoading({ text: '拉取15年历史数据...', color: '#3b82f6' });
 
+  // 拉取极长周期数据（不限制2500，直接取最大）
   Promise.all([fetchHistory('510300', true), fetchHistory('511010', true)]).then(function(results) {
     var hs300DataRaw = results[0];
     var bondDataRaw = results[1];
@@ -491,11 +509,10 @@ function initERPChart() {
     var normHs300 = [];
     var normBond = [];
 
-    var len = Math.min(hs300DataRaw.length, bondDataRaw.length, 2500);
-    var startIdx = hs300DataRaw.length - len; 
+    var startIdx = 0; 
     
     var baseHs300 = hs300DataRaw[startIdx].val;
-    var baseBond = bondDataRaw[bondDataRaw.length - len].val;
+    var baseBond = bondDataRaw[0].val;
     
     var bondDict = {};
     bondDataRaw.forEach(function(item) { bondDict[item.date] = item.val; });
@@ -544,8 +561,22 @@ function initERPChart() {
         }
     }];
 
-    // ======= 加宽绿色大底区 =======
-    var greenLineVal = ratioMin * 1.15; // 往上拉，加宽
+    // 更新悬浮框
+    document.getElementById('fbVal').textContent = lastRatio.toFixed(3);
+    var descEl = document.getElementById('fbDesc');
+    var greenLineVal = ratioMin * 1.10;
+    var redLineVal = ratioMax * 0.90; // 红色高估线
+
+    if (lastRatio <= greenLineVal) {
+        descEl.textContent = '🟢 极度低估 (大底区)';
+        descEl.style.color = 'var(--green)';
+    } else if (lastRatio >= redLineVal) {
+        descEl.textContent = '🔴 极度高估 (注意风险)';
+        descEl.style.color = 'var(--red)';
+    } else {
+        descEl.textContent = '🟡 正常区间 (等待机会)';
+        descEl.style.color = 'var(--yellow)';
+    }
 
     var option = {
       backgroundColor: 'transparent',
@@ -570,7 +601,7 @@ function initERPChart() {
           axisLabel: { 
             color: '#64748b', 
             hideOverlap: true, 
-            formatter: function(val) { return val.substring(2, 7); } // 只显示 YY-MM 防止重叠
+            formatter: function(val) { return val.substring(2, 7); }
           } 
         } 
       ],
@@ -590,9 +621,12 @@ function initERPChart() {
           },
           markLine: { 
               symbol: ['none', 'none'], 
-              data: [{ yAxis: greenLineVal, lineStyle: { color: '#10b981', type: 'dashed', width: 2 }, label: { formatter: '历史大底区', position: 'insideEndTop', color: '#10b981' } }] 
+              data: [
+                  { yAxis: greenLineVal, lineStyle: { color: '#10b981', type: 'dashed', width: 1 } }, // 去掉文字
+                  { yAxis: redLineVal, lineStyle: { color: '#ef4444', type: 'dashed', width: 1 } } // 新增红色上轨
+              ] 
           },
-          markArea: { itemStyle: { color: 'rgba(16, 185, 129, 0.15)' }, data: [[{ yAxis: 0 }, { yAxis: greenLineVal }]] }
+          markArea: { itemStyle: { color: 'rgba(16, 185, 129, 0.1)' }, data: [[{ yAxis: 0 }, { yAxis: greenLineVal }]] }
         }
       ]
     };
@@ -601,7 +635,7 @@ function initERPChart() {
   }).catch(function(e) { erpChartInstance.hideLoading(); });
 }
 
-// ================= 图2：情绪与资金图（近1个月，约22个交易日） =================
+// ================= 图2：情绪与资金图（近1个月） =================
 function initSentimentChart() {
   var chartDom = document.getElementById('sentimentChart');
   if (!sentimentChartInstance) sentimentChartInstance = echarts.init(chartDom, 'dark');
@@ -656,17 +690,17 @@ function initSentimentChart() {
                 return (p > 0 ? '+' : '') + p.toFixed(2) + '%';
             };
 
+            // 逐行显示指数涨跌幅
             html += '<div style="font-size:12px;margin-bottom:8px;line-height:1.6;border-bottom:1px dashed rgba(255,255,255,0.2);padding-bottom:8px;">';
             if (h.indices) {
-                html += '上证: <span style="color:' + (parseFloat(h.indices.sh) >= 0 ? '#ef4444' : '#10b981') + '">' + fmtIdx(h.indices.sh) + '</span> | ';
+                html += '上证: <span style="color:' + (parseFloat(h.indices.sh) >= 0 ? '#ef4444' : '#10b981') + '">' + fmtIdx(h.indices.sh) + '</span><br/>';
                 html += '深证: <span style="color:' + (parseFloat(h.indices.sz) >= 0 ? '#ef4444' : '#10b981') + '">' + fmtIdx(h.indices.sz) + '</span><br/>';
-                html += '创业板: <span style="color:' + (parseFloat(h.indices.cyb) >= 0 ? '#ef4444' : '#10b981') + '">' + fmtIdx(h.indices.cyb) + '</span> | ';
+                html += '创业板: <span style="color:' + (parseFloat(h.indices.cyb) >= 0 ? '#ef4444' : '#10b981') + '">' + fmtIdx(h.indices.cyb) + '</span><br/>';
                 html += '科创50: <span style="color:' + (parseFloat(h.indices.kc) >= 0 ? '#ef4444' : '#10b981') + '">' + fmtIdx(h.indices.kc) + '</span><br/>';
                 html += '北证50: <span style="color:' + (parseFloat(h.indices.bz) >= 0 ? '#ef4444' : '#10b981') + '">' + fmtIdx(h.indices.bz) + '</span>';
             }
             html += '</div>';
             
-            // 强制保留1位小数
             var flowStr = parseFloat(h.flow).toFixed(1);
             html += '<div style="font-size:12px;line-height:1.6;">';
             html += '主力净流入: <strong style="color:' + (parseFloat(flowStr) >= 0 ? '#ef4444' : '#10b981') + '">' + flowStr + ' 亿</strong><br/>';
@@ -694,17 +728,7 @@ function initSentimentChart() {
     series: [
       {
         name: '主力净流入 (亿)', type: 'bar', yAxisIndex: 0, data: flowData,
-        itemStyle: { color: function(params) { return params.value >= 0 ? '#ef4444' : '#10b981'; } },
-        label: {
-            show: true,
-            position: 'top',
-            formatter: function(params) {
-                if (params.dataIndex === flowData.length - 1) return '当前';
-                return '';
-            },
-            color: '#f59e0b',
-            fontWeight: 'bold'
-        }
+        itemStyle: { color: function(params) { return params.value >= 0 ? '#ef4444' : '#10b981'; } }
       },
       {
         name: '市场宽广度 (%)', type: 'line', yAxisIndex: 1, data: breadthData,
@@ -728,7 +752,6 @@ function recordSentimentData(breadth, flowYi, indicesData) {
       if (history[i].date === todayStr) { todayIndex = i; break; }
     }
     
-    // 确保存入的 flow 是格式化后的 1 位小数
     var newRecord = { date: todayStr, breadth: parseFloat(breadth), flow: parseFloat(parseFloat(flowYi).toFixed(1)), indices: indicesData };
     if (todayIndex >= 0) {
       history[todayIndex] = newRecord;
@@ -1499,7 +1522,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V8.8 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
+      + '<div style="font-size:13px">V8.9 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
