@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V9.0 | 上下全景防重叠版</title>
+<title>基金监测系统 V9.1 | 极宽拉伸版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -223,7 +223,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V9.0 上下全景防重叠版</span></h1>
+    <h1>📊 基金监测系统 <span>V9.1 极宽拉伸版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -237,9 +237,9 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     <div class="chart-card">
       <div class="chart-title">
         <span>📉 股债性价比 (15年历史大底与高估线)</span>
-        <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:股债比 | 绿区:历史大底 | 红区:高估预警</span>
+        <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:股债比 | 绿区:大底 | 红区:高估</span>
       </div>
-      <!-- 悬浮提示框 (已移位，防止遮挡) -->
+      <!-- 悬浮提示框 -->
       <div class="floating-badge" id="erpFloatingBadge">
         <div class="f-title">当前股债比位置</div>
         <div class="f-val" id="fbVal">--</div>
@@ -371,7 +371,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V9.0 上下全景防重叠版：图1双Y轴，国债曲线清晰可见 | 数据源：fund-api + 东方财富</p>
+    <p>V9.1 极宽拉伸版：图1横向拉宽，最新点位不重叠 | 数据源：fund-api + 东方财富</p>
   </div>
 </div>
 
@@ -488,11 +488,11 @@ function cleanOldCache() {
       }
     }
     keysToRemove.forEach(function(k) { localStorage.removeItem(k); });
-    localStorage.removeItem('marketSentimentHistory'); // 清空历史，防止旧格式干扰
+    localStorage.removeItem('marketSentimentHistory');
   } catch(e) {}
 }
 
-// ================= 图1：股债大底图（15年历史 + 双Y轴 + 防重叠） =================
+// ================= 图1：股债大底图（横向拉满 + 防重叠） =================
 function initERPChart() {
   var chartDom = document.getElementById('erpChart');
   if (!erpChartInstance) erpChartInstance = echarts.init(chartDom, 'dark');
@@ -545,7 +545,7 @@ function initERPChart() {
     var lastRatio = ratios[ratios.length - 1];
     document.getElementById('fbVal').textContent = lastRatio.toFixed(3);
     var descEl = document.getElementById('fbDesc');
-    var greenLineVal = ratioMin * 1.25; // 拉高大底区
+    var greenLineVal = ratioMin * 1.25; // 拉高大底区，更宽容一些
     var redLineVal = ratioMax * 0.90; // 红色高估线
 
     if (lastRatio <= greenLineVal) {
@@ -570,8 +570,8 @@ function initERPChart() {
       },
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
       grid: [
-        { top: '10%', height: '40%', left: '15%', right: '10%', containLabel: true }, // 左侧留出空间，右侧收边
-        { top: '60%', height: '30%', left: '15%', right: '10%', containLabel: true }
+        { top: '10%', height: '40%', left: '4%', right: '5%', containLabel: true }, // 极大地拉伸左右
+        { top: '60%', height: '30%', left: '4%', right: '5%', containLabel: true }
       ],
       xAxis: [
         { type: 'category', gridIndex: 0, data: dates, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
@@ -584,12 +584,12 @@ function initERPChart() {
       ],
       yAxis: [
         { type: 'value', gridIndex: 0, scale: true, name: '沪深300', nameTextStyle: {color: '#ef4444'}, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#ef4444' } },
-        { type: 'value', gridIndex: 0, scale: true, name: '国债', nameTextStyle: {color: '#3b82f6'}, splitLine: { show: false }, axisLabel: { color: '#3b82f6' } }, // 右侧双Y轴
+        { type: 'value', gridIndex: 0, scale: true, name: '国债', nameTextStyle: {color: '#3b82f6'}, splitLine: { show: false }, axisLabel: { color: '#3b82f6' } }, 
         { type: 'value', gridIndex: 1, scale: true, name: '股债比', nameTextStyle: {color: '#f59e0b'}, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#f59e0b' } }
       ],
       series: [
         { name: '沪深300', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: normHs300, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#ef4444' } },
-        { name: '国债ETF', type: 'line', xAxisIndex: 0, yAxisIndex: 1, data: normBond, smooth: true, symbol: 'none', lineStyle: { width: 2.5, color: '#3b82f6' } }, // 加粗蓝线
+        { name: '国债ETF', type: 'line', xAxisIndex: 0, yAxisIndex: 1, data: normBond, smooth: true, symbol: 'none', lineStyle: { width: 2.5, color: '#3b82f6' } }, 
         {
           name: '股债比值', type: 'line', xAxisIndex: 1, yAxisIndex: 2, data: ratios, smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#f59e0b' },
           markLine: { 
@@ -655,7 +655,6 @@ function initSentimentChart() {
             
             var html = '<div style="font-weight:bold;margin-bottom:8px;font-size:14px;">' + h.date + '</div>';
             
-            // 强制分行显示
             var fmtIdx = function(v) {
                 var p = parseFloat(v);
                 if (isNaN(p)) return '0.00%';
@@ -683,15 +682,11 @@ function initSentimentChart() {
         }
     },
     legend: { data: ['主力净流入 (亿)', '市场宽广度 (%)'], textStyle: { color: '#94a3b8' }, top: 0 },
-    grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
+    grid: { left: '4%', right: '5%', bottom: '3%', top: '15%', containLabel: true },
     xAxis: { 
         type: 'category', 
         data: dates, 
-        axisLabel: { 
-            color: '#64748b', 
-            hideOverlap: true, 
-            interval: 'auto'
-        } 
+        axisLabel: { color: '#64748b', hideOverlap: true, interval: 'auto' } 
     },
     yAxis: [
       { type: 'value', name: '净流入(亿)', axisLabel: { color: '#64748b' }, splitLine: { show: false } },
@@ -1494,7 +1489,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V9.0 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
+      + '<div style="font-size:13px">V9.1 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
