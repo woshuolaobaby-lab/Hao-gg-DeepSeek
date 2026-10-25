@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V8.9 | 上下全景版</title>
+<title>基金监测系统 V9.0 | 上下全景防重叠版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -33,15 +33,15 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .chart-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; position:relative; }
 .chart-title { font-size:14px; color:var(--text); font-weight:600; margin-bottom:12px; display:flex; justify-content:space-between;}
 .chart-title span { font-size:12px; color:var(--muted); font-weight:400;}
-.chart-box-erp { width:100%; height:380px; }
-.chart-box-sentiment { width:100%; height:260px; }
+.chart-box-erp { width:100%; height:400px; }
+.chart-box-sentiment { width:100%; height:280px; }
 
 /* 悬浮提示框 */
 .floating-badge {
-    position: absolute; top: 60px; left: 30px;
-    background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.1);
-    padding: 12px 16px; border-radius: 8px; backdrop-filter: blur(4px);
-    pointer-events: none; z-index: 10;
+    position: absolute; top: 60px; left: 20px;
+    background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.15);
+    padding: 12px 16px; border-radius: 8px; backdrop-filter: blur(6px);
+    pointer-events: none; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
 .floating-badge .f-title { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .floating-badge .f-val { font-size: 24px; font-weight: 800; color: var(--yellow); margin-bottom: 4px; }
@@ -223,7 +223,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V8.9 上下全景版</span></h1>
+    <h1>📊 基金监测系统 <span>V9.0 上下全景防重叠版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -237,9 +237,9 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     <div class="chart-card">
       <div class="chart-title">
         <span>📉 股债性价比 (15年历史大底与高估线)</span>
-        <span style="color:var(--red)">红线:高估预警 | 绿线:历史大底 | 仅保留当前点位(3位小数)</span>
+        <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:股债比 | 绿区:历史大底 | 红区:高估预警</span>
       </div>
-      <!-- 悬浮提示框 -->
+      <!-- 悬浮提示框 (已移位，防止遮挡) -->
       <div class="floating-badge" id="erpFloatingBadge">
         <div class="f-title">当前股债比位置</div>
         <div class="f-val" id="fbVal">--</div>
@@ -371,7 +371,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V8.9 上下全景版：上下双图布局，图1自带当前股债比提示框 | 数据源：fund-api + 东方财富</p>
+    <p>V9.0 上下全景防重叠版：图1双Y轴，国债曲线清晰可见 | 数据源：fund-api + 东方财富</p>
   </div>
 </div>
 
@@ -492,13 +492,12 @@ function cleanOldCache() {
   } catch(e) {}
 }
 
-// ================= 图1：股债大底图（15年历史 + 上下轨 + 当前悬浮） =================
+// ================= 图1：股债大底图（15年历史 + 双Y轴 + 防重叠） =================
 function initERPChart() {
   var chartDom = document.getElementById('erpChart');
   if (!erpChartInstance) erpChartInstance = echarts.init(chartDom, 'dark');
   erpChartInstance.showLoading({ text: '拉取15年历史数据...', color: '#3b82f6' });
 
-  // 拉取极长周期数据（不限制2500，直接取最大）
   Promise.all([fetchHistory('510300', true), fetchHistory('511010', true)]).then(function(results) {
     var hs300DataRaw = results[0];
     var bondDataRaw = results[1];
@@ -509,6 +508,7 @@ function initERPChart() {
     var normHs300 = [];
     var normBond = [];
 
+    var len = hs300DataRaw.length;
     var startIdx = 0; 
     
     var baseHs300 = hs300DataRaw[startIdx].val;
@@ -541,30 +541,11 @@ function initERPChart() {
       if (ratio > ratioMax) ratioMax = ratio;
     }
 
-    // ======= 只标注最新一个点 =======
-    var lastIdx = ratios.length - 1;
-    var lastDate = dates[lastIdx];
-    var lastRatio = ratios[lastIdx];
-    
-    var markData = [{
-        name: '当前', 
-        coord: [lastDate, lastRatio], 
-        value: lastRatio.toFixed(3),
-        itemStyle: { color: '#f59e0b' },
-        label: { 
-            formatter: '{c}', 
-            position: 'bottom', 
-            color: '#f59e0b', 
-            fontWeight: 'bold', 
-            fontSize: 12,
-            distance: 10
-        }
-    }];
-
     // 更新悬浮框
+    var lastRatio = ratios[ratios.length - 1];
     document.getElementById('fbVal').textContent = lastRatio.toFixed(3);
     var descEl = document.getElementById('fbDesc');
-    var greenLineVal = ratioMin * 1.10;
+    var greenLineVal = ratioMin * 1.25; // 拉高大底区
     var redLineVal = ratioMax * 0.90; // 红色高估线
 
     if (lastRatio <= greenLineVal) {
@@ -589,8 +570,8 @@ function initERPChart() {
       },
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
       grid: [
-        { top: '5%', height: '45%', left: '3%', right: '4%', containLabel: true },
-        { top: '60%', height: '30%', left: '3%', right: '4%', containLabel: true }
+        { top: '10%', height: '40%', left: '15%', right: '10%', containLabel: true }, // 左侧留出空间，右侧收边
+        { top: '60%', height: '30%', left: '15%', right: '10%', containLabel: true }
       ],
       xAxis: [
         { type: 'category', gridIndex: 0, data: dates, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
@@ -598,35 +579,27 @@ function initERPChart() {
           type: 'category', 
           gridIndex: 1, 
           data: dates, 
-          axisLabel: { 
-            color: '#64748b', 
-            hideOverlap: true, 
-            formatter: function(val) { return val.substring(2, 7); }
-          } 
+          axisLabel: { color: '#64748b', hideOverlap: true, formatter: function(val) { return val.substring(2, 7); } } 
         } 
       ],
       yAxis: [
-        { type: 'value', gridIndex: 0, scale: true, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#64748b', formatter: function(v){ return v.toFixed(2); } } },
-        { type: 'value', gridIndex: 1, scale: true, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#64748b', formatter: function(v){ return v.toFixed(2); } } }
+        { type: 'value', gridIndex: 0, scale: true, name: '沪深300', nameTextStyle: {color: '#ef4444'}, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#ef4444' } },
+        { type: 'value', gridIndex: 0, scale: true, name: '国债', nameTextStyle: {color: '#3b82f6'}, splitLine: { show: false }, axisLabel: { color: '#3b82f6' } }, // 右侧双Y轴
+        { type: 'value', gridIndex: 1, scale: true, name: '股债比', nameTextStyle: {color: '#f59e0b'}, splitLine: { lineStyle: { color: '#1e293b' } }, axisLabel: { color: '#f59e0b' } }
       ],
       series: [
         { name: '沪深300', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: normHs300, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#ef4444' } },
-        { name: '国债ETF', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: normBond, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#3b82f6' } },
+        { name: '国债ETF', type: 'line', xAxisIndex: 0, yAxisIndex: 1, data: normBond, smooth: true, symbol: 'none', lineStyle: { width: 2.5, color: '#3b82f6' } }, // 加粗蓝线
         {
-          name: '股债比值', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: ratios, smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#f59e0b' },
-          markPoint: {
-              symbol: 'circle',
-              symbolSize: 8,
-              data: markData
-          },
+          name: '股债比值', type: 'line', xAxisIndex: 1, yAxisIndex: 2, data: ratios, smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#f59e0b' },
           markLine: { 
               symbol: ['none', 'none'], 
               data: [
-                  { yAxis: greenLineVal, lineStyle: { color: '#10b981', type: 'dashed', width: 1 } }, // 去掉文字
-                  { yAxis: redLineVal, lineStyle: { color: '#ef4444', type: 'dashed', width: 1 } } // 新增红色上轨
+                  { yAxis: greenLineVal, lineStyle: { color: '#10b981', type: 'dashed', width: 1 } }, // 绿线
+                  { yAxis: redLineVal, lineStyle: { color: '#ef4444', type: 'dashed', width: 1 } } // 红线
               ] 
           },
-          markArea: { itemStyle: { color: 'rgba(16, 185, 129, 0.1)' }, data: [[{ yAxis: 0 }, { yAxis: greenLineVal }]] }
+          markArea: { itemStyle: { color: 'rgba(16, 185, 129, 0.15)' }, data: [[{ yAxis: 0 }, { yAxis: greenLineVal }]] }
         }
       ]
     };
@@ -682,7 +655,7 @@ function initSentimentChart() {
             
             var html = '<div style="font-weight:bold;margin-bottom:8px;font-size:14px;">' + h.date + '</div>';
             
-            // 格式化指数涨跌幅的辅助函数
+            // 强制分行显示
             var fmtIdx = function(v) {
                 var p = parseFloat(v);
                 if (isNaN(p)) return '0.00%';
@@ -690,7 +663,6 @@ function initSentimentChart() {
                 return (p > 0 ? '+' : '') + p.toFixed(2) + '%';
             };
 
-            // 逐行显示指数涨跌幅
             html += '<div style="font-size:12px;margin-bottom:8px;line-height:1.6;border-bottom:1px dashed rgba(255,255,255,0.2);padding-bottom:8px;">';
             if (h.indices) {
                 html += '上证: <span style="color:' + (parseFloat(h.indices.sh) >= 0 ? '#ef4444' : '#10b981') + '">' + fmtIdx(h.indices.sh) + '</span><br/>';
@@ -1522,7 +1494,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V8.9 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
+      + '<div style="font-size:13px">V9.0 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
