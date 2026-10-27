@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V9.2 | 极宽精准版</title>
+<title>基金监测系统 V9.3 | 极宽精准版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -36,12 +36,13 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .chart-box-erp { width:100%; height:400px; }
 .chart-box-sentiment { width:100%; height:280px; }
 
-/* 悬浮提示框 - 修改点：移到右上方 */
+/* 悬浮提示框 - 彻底居中对齐 */
 .floating-badge {
-    position: absolute; top: 40px; right: 25%; /* 调整了位置 */
+    position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
     background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.15);
-    padding: 12px 16px; border-radius: 8px; backdrop-filter: blur(6px);
+    padding: 12px 24px; border-radius: 8px; backdrop-filter: blur(6px);
     pointer-events: none; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    text-align: center;
 }
 .floating-badge .f-title { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .floating-badge .f-val { font-size: 24px; font-weight: 800; color: var(--yellow); margin-bottom: 4px; }
@@ -223,7 +224,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V9.2 极宽精准版</span></h1>
+    <h1>📊 基金监测系统 <span>V9.3 极宽精准版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -239,7 +240,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
         <span>📉 股债性价比 (15年历史大底与高估线)</span>
         <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:股债比 | 绿区:大底 | 红区:高估</span>
       </div>
-      <!-- 悬浮提示框 -->
+      <!-- 悬浮提示框 (已完美居中) -->
       <div class="floating-badge" id="erpFloatingBadge">
         <div class="f-title">当前股债比位置</div>
         <div class="f-val" id="fbVal">--</div>
@@ -371,7 +372,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V9.2 极宽拉伸版：图1横向拉宽，最新点位不重叠 | 数据源：fund-api + 东方财富</p>
+    <p>V9.3 极宽拉伸版：悬浮框居中，资金图表数据持久化修复 | 数据源：fund-api + 东方财富</p>
   </div>
 </div>
 
@@ -488,7 +489,7 @@ function cleanOldCache() {
       }
     }
     keysToRemove.forEach(function(k) { localStorage.removeItem(k); });
-    localStorage.removeItem('marketSentimentHistory');
+    // 修正：这里不要清空 marketSentimentHistory，否则图表每次刷新只有一天数据
   } catch(e) {}
 }
 
@@ -570,8 +571,8 @@ function initERPChart() {
       },
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
       grid: [
-        { top: '10%', height: '40%', left: '4%', right: '5%', containLabel: true }, // 极大地拉伸左右
-        { top: '60%', height: '30%', left: '4%', right: '5%', containLabel: true }
+        { top: '15%', height: '40%', left: '4%', right: '5%', containLabel: true }, // 留出顶空给悬浮框
+        { top: '65%', height: '25%', left: '4%', right: '5%', containLabel: true }
       ],
       xAxis: [
         { type: 'category', gridIndex: 0, data: dates, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
@@ -608,7 +609,7 @@ function initERPChart() {
   }).catch(function(e) { erpChartInstance.hideLoading(); });
 }
 
-// ================= 图2：情绪与资金图（近1个月真实数据） =================
+// ================= 图2：情绪与资金图（近1个月真实数据 + 持久化） =================
 function initSentimentChart() {
   var chartDom = document.getElementById('sentimentChart');
   if (!sentimentChartInstance) sentimentChartInstance = echarts.init(chartDom, 'dark');
@@ -616,7 +617,6 @@ function initSentimentChart() {
   var historyStr = localStorage.getItem('marketSentimentHistory');
   var history = historyStr ? JSON.parse(historyStr) : [];
   
-  // 移除原本的随机乱跳逻辑，如果为空，直接图表留空，等真实数据拉取
   var dates = history.map(function(h) { return h.date.substring(5); });
   var breadthData = history.map(function(h) { return h.breadth; });
   var flowData = history.map(function(h) { return h.flow; });
@@ -684,31 +684,6 @@ function initSentimentChart() {
     ]
   };
   sentimentChartInstance.setOption(option);
-}
-
-// 记录当天真实情绪数据
-function recordSentimentData(breadth, flowYi, indicesData) {
-  try {
-    var todayStr = new Date().toISOString().slice(0, 10);
-    var historyStr = localStorage.getItem('marketSentimentHistory');
-    var history = historyStr ? JSON.parse(historyStr) : [];
-    
-    var todayIndex = -1;
-    for(var i = 0; i < history.length; i++) {
-      if (history[i].date === todayStr) { todayIndex = i; break; }
-    }
-    
-    var newRecord = { date: todayStr, breadth: parseFloat(breadth), flow: parseFloat(parseFloat(flowYi).toFixed(1)), indices: indicesData };
-    if (todayIndex >= 0) {
-      history[todayIndex] = newRecord;
-    } else {
-      history.push(newRecord);
-      if (history.length > 22) history = history.slice(-22); 
-    }
-    localStorage.setItem('marketSentimentHistory', JSON.stringify(history));
-    
-    initSentimentChart();
-  } catch(e) {}
 }
 
 // ================= 市场资金雷达 =================
@@ -793,6 +768,19 @@ function fetchMarketRadar() {
         
         window._tempBreadth = breadth;
         window._tempIndices = indicesData;
+        
+        // 如果雷达数据比资金流向晚到，这里触发一次重新渲染更新今天的广度数据
+        if (localStorage.getItem('marketSentimentHistory')) {
+            var history = JSON.parse(localStorage.getItem('marketSentimentHistory'));
+            var todayStr = new Date().toISOString().slice(0, 10);
+            var todayRecord = history.find(function(h){ return h.date === todayStr; });
+            if (todayRecord) {
+                todayRecord.breadth = breadth;
+                todayRecord.indices = indicesData;
+                localStorage.setItem('marketSentimentHistory', JSON.stringify(history));
+                initSentimentChart();
+            }
+        }
       }
     } catch(e) { console.error("Radar error", e); }
     
@@ -807,7 +795,7 @@ function fetchMarketRadar() {
   document.body.appendChild(script);
 }
 
-// ================= 情绪与资金数据获取（已修改为拉取30天真实数据） =================
+// ================= 情绪与资金数据获取（核心重构：确保持久化且满30天） =================
 function fetchSentimentData() {
   var flowCb = 'flow_cb_' + Date.now();
   window[flowCb] = function(data) {
@@ -819,7 +807,7 @@ function fetchSentimentData() {
         var historyMap = {};
         history.forEach(function(h) { historyMap[h.date] = h; });
 
-        // 遍历接口返回的过去30天真实资金流向
+        // 遍历接口返回的过去30天真实资金流向，与本地缓存合并
         data.data.klines.forEach(function(klineStr) {
             var parts = klineStr.split(',');
             var dateStr = parts[0]; 
@@ -827,21 +815,24 @@ function fetchSentimentData() {
             var flowYi = mainFlow / 100000000;
 
             if (historyMap[dateStr]) {
+                // 已有该天数据，只更新真实的资金流向
                 historyMap[dateStr].flow = parseFloat(flowYi.toFixed(1));
             } else {
+                // 新增历史日期，默认广度50占位
                 historyMap[dateStr] = {
                     date: dateStr,
-                    breadth: 50, // 历史广阔度没有接口，用50平缓占位，但不影响K线
+                    breadth: 50,
                     flow: parseFloat(flowYi.toFixed(1)),
                     indices: { sh:'0.00', sz:'0.00', cyb:'0.00', kc:'0.00', bz:'0.00' }
                 };
             }
         });
 
+        // 重新排序并截取最近 22 个交易日（约1个月）
         var newHistory = Object.values(historyMap).sort(function(a,b){ return a.date.localeCompare(b.date); });
         if (newHistory.length > 22) newHistory = newHistory.slice(-22);
 
-        // 把最新的真实宽广度写到今天的数据里
+        // 把最新的真实宽广度写到今天的数据里（如果接口比雷达快，先占位）
         var todayStr = new Date().toISOString().slice(0, 10);
         if (window._tempBreadth !== undefined && window._tempIndices !== undefined) {
            var todayRecord = newHistory.find(function(h){ return h.date === todayStr; });
@@ -862,7 +853,6 @@ function fetchSentimentData() {
   
   var s1 = document.createElement('script');
   s1.id = flowCb;
-  // 把 lmt=1 改成了 lmt=30
   s1.src = 'https://push2.eastmoney.com/api/qt/stock/fflow/kline/get?cb=' + flowCb + '&lmt=30&klt=101&secid=1.000001&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65';
   document.body.appendChild(s1);
 
@@ -1499,7 +1489,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V9.2 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
+      + '<div style="font-size:13px">V9.3 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
