@@ -491,7 +491,6 @@ function initERPChart() {
   if (!erpChartInstance) erpChartInstance = echarts.init(chartDom, 'dark');
   erpChartInstance.showLoading({ text: '拉取15年历史数据...', color: '#3b82f6' });
 
-  // 加入随机参数防止浏览器缓存 JS 数据
   Promise.all([fetchHistory('510300', true), fetchHistory('511010', true)]).then(function(results) {
     var hs300DataRaw = results[0];
     var bondDataRaw = results[1];
@@ -540,7 +539,7 @@ function initERPChart() {
     document.getElementById('fbVal').textContent = lastRatio.toFixed(3);
     var descEl = document.getElementById('fbDesc');
     
-    // 修改点1：加大底测算
+    // 加大底测算
     var greenLineVal = ratioMin * 1.25; 
     var redLineVal = ratioMax * 0.90; 
 
@@ -839,7 +838,7 @@ function fetchSentimentData() {
   window[flowCb] = function(data) {
     try {
       if (data && data.data && data.data.klines && data.data.klines.length > 0) {
-        // 修改点3：在这里更新大盘主力净流入
+        // 在这里更新大盘主力净流入
         var latest = data.data.klines[data.data.klines.length - 1].split(',');
         var mainFlow = parseFloat(latest[1]);
         var flowYi = (mainFlow / 100000000).toFixed(1);
@@ -916,7 +915,6 @@ function fetchSentimentData() {
   document.body.appendChild(s1);
 }
 
-// 后面的代码保持不变
 function updateSentimentUI(zt, dt, zb) {
   document.getElementById('stLimitUpDown').textContent = zt + ' / ' + dt;
   document.getElementById('stLimitUpDown').style.color = zt > 60 ? 'var(--red)' : (zt < 30 ? 'var(--green)' : 'var(--yellow)');
@@ -1133,7 +1131,669 @@ async function fetchHistory(code, withDate = false) {
     document.body.appendChild(script);
   });
 }
-// ... 后面是原有的指标计算和渲染逻辑，保持不变 ...
+
+function calcEMA(series, period) {
+  if (series.length === 0) return [];
+  var k = 2 / (period + 1);
+  var ema = [series[0]];
+  for (var i = 1; i < series.length; i++) ema.push(series[i] * k + ema[i-1] * (1 - k));
+  return ema;
+}
+function calcRSI(closes, period) {
+  period = period || 14;
+  if (closes.length < period + 1) return 50;
+  var gains = 0, losses = 0;
+  for (var i = 1; i <= period; i++) { var d = closes[i] - closes[i-1]; if (d > 0) gains += d; else losses -= d; }
+  var avgGain = gains / period, avgLoss = losses / period;
+  for (var j = period + 1; j < closes.length; j++) {
+    var d2 = closes[j] - closes[j-1];
+    avgGain = (avgGain * (period - 1) + (d2 > 0 ? d2 : 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + (d2 < 0 ? -d2 : 0)) / period;
+  }
+  if (avgLoss === 0) return 100;
+  return 100 - 100 / (1 + avgGain / avgLoss);
+}
+function calcMACD(closes) {
+  if (closes.length < 35) return { cross:'中性' };
+  var ema12 = calcEMA(closes, 12), ema26 = calcEMA(closes, 26);
+  var dif = ema12.map(function(v,i) { return v - ema26[i]; });
+  var dea = calcEMA(dif, 9);
+  var hist = dif.map(function(v,i) { return 2 * (v - dea[i]); });
+  var lh = hist[hist.length-1], ph = hist[hist.length-2];
+  var cross = '中性';
+  if (lh > 0 && ph <= 0) cross = '金叉';
+  else if (lh < 0 && ph >= 0) cross = '死叉';
+  else if (lh > 0) cross = '多头';
+  else if (lh < 0) cross = '空头';
+  return { cross:cross };
+}
+function calcBollinger(closes, period) {
+  period = period || 20;
+  if (closes.length < period) return { pos:50 };
+  var s = closes.slice(-period);
+  var ma = s.reduce(function(a,b){return a+b;},0) / period;
+  var sd = Math.sqrt(s.reduce(function(a,b){return a+Math.pow(b-ma,2);},0) / period);
+  var upper = ma + 2*sd, lower = ma - 2*sd;
+  var last = closes[closes.length-1];
+  var pos = upper === lower ? 50 : Math.min(100, Math.max(0, (last-lower)/(upper-lower)*100));
+  return { pos:pos };
+}
+function calcATR(closes, period) {
+  period = period || 14;
+  if (closes.length < period+1) return 1;
+  var trs = [];
+  for (var i = 1; i < closes.length; i++) trs.push(Math.abs(closes[i] - closes[i-1]));
+  return trs.slice(-period).reduce(function(a,b){return a+b;},0) / period;
+}
+function calcMA(closes, period) {
+  if (closes.length < period) return null;
+  return closes.slice(-period).reduce(function(a,b){return a+b;},0) / period;
+}
+function calcRiskMetrics(closes) {
+  if (!closes || closes.length < 30) return { sharpe:0, calmar:0, var95:0, cvar95:0, annualReturn:0, maxDrawdown:0, volatility:0 };
+  var returns = [];
+  for (var i = 1; i < closes.length; i++) returns.push((closes[i] - closes[i-1]) / closes[i-1]);
+  var mean = returns.reduce(function(a,b){return a+b;},0) / returns.length;
+  var variance = returns.reduce(function(a,b){return a + Math.pow(b-mean,2);},0) / returns.length;
+  var dailyVol = Math.sqrt(variance);
+  var annualVol = dailyVol * Math.sqrt(252);
+  var annualReturn = mean * 252;
+  var peak = closes[0], maxDD = 0;
+  for (var j = 0; j < closes.length; j++) { if (closes[j] > peak) peak = closes[j]; var dd = (peak - closes[j]) / peak; if (dd > maxDD) maxDD = dd; }
+  var riskFree = 0.02;
+  var sharpe = annualVol > 0 ? (annualReturn - riskFree) / annualVol : 0;
+  var calmar = maxDD > 0 ? annualReturn / maxDD : 0;
+  var sorted = returns.slice().sort(function(a,b){return a-b;});
+  var var95 = sorted[Math.floor(sorted.length * 0.05)] * 100;
+  var tailCount = Math.max(1, Math.floor(sorted.length * 0.05));
+  var tailSum = 0;
+  for (var k = 0; k < tailCount; k++) tailSum += sorted[k];
+  var cvar95 = (tailSum / tailCount) * 100;
+  return { sharpe:sharpe, calmar:calmar, var95:var95, cvar95:cvar95, annualReturn:annualReturn*100, maxDrawdown:maxDD*100, volatility:annualVol*100 };
+}
+
+function calcIndicators(closes, parsed) {
+  var lastClose;
+  if (closes && closes.length > 0) lastClose = closes[closes.length - 1];
+  else if (parsed && parsed.estimate) lastClose = parsed.estimate;
+  else if (parsed && parsed.netValue) lastClose = parsed.netValue;
+  else lastClose = 1.0;
+  
+  if (!closes || closes.length < 30) {
+    var pct = parsed ? parsed.changeRate : 0;
+    return {
+      rsi: Math.min(95, Math.max(5, 50 + pct * 8)),
+      macd: { cross: pct > 0.5 ? '金叉' : pct < -0.5 ? '死叉' : '中性' },
+      boll: { pos: Math.min(95, Math.max(5, 50 + pct * 10)) },
+      atr: Math.abs(pct) * 0.8 + 0.5, atrPct: Math.abs(pct) * 0.8 + 0.5,
+      maStatus: pct > 0.3 ? '多头' : pct < -0.3 ? '空头' : '纠缠',
+      pct: pct, lastClose: lastClose, ma5: lastClose,
+      ma20Trend: '-', mom20: 0, mom60: 0,
+      sharpe: 0, calmar: 0, var95: 0, cvar95: 0, annualReturn: 0, maxDrawdown: 0, volatility: 0
+    };
+  }
+  var rsi = calcRSI(closes), macd = calcMACD(closes), boll = calcBollinger(closes), atr = calcATR(closes);
+  var ma5 = closes.slice(-5).reduce(function(a,b){return a+b;},0) / 5;
+  var ma50 = calcMA(closes, 50), ma200 = calcMA(closes, Math.min(200, closes.length));
+  var last = closes[closes.length-1], prev = closes[closes.length-2];
+  var pct = prev ? (last - prev) / prev * 100 : 0;
+  var maStatus = '纠缠';
+  if (ma50 && ma200) { if (last > ma50 && ma50 > ma200) maStatus = '多头'; else if (last < ma50 && ma50 < ma200) maStatus = '空头'; }
+  var len = closes.length;
+  var ma20 = closes.slice(-20).reduce(function(a,b){return a+b;},0)/20;
+  var ma20Prev5 = len >= 25 ? closes.slice(-25,-5).reduce(function(a,b){return a+b;},0)/20 : ma20;
+  var ma20Trend = ma20 > ma20Prev5 ? '向上' : '向下';
+  var mom20 = len >= 21 ? (last - closes[len-21]) / closes[len-21] * 100 : 0;
+  var mom60 = len >= 61 ? (last - closes[len-61]) / closes[len-61] * 100 : 0;
+  var risk = calcRiskMetrics(closes);
+  return {
+    rsi: rsi, macd: macd, boll: boll, atr: atr, atrPct: last > 0 ? atr/last*100 : 1,
+    maStatus: maStatus, pct: pct, lastClose: last, ma5: ma5,
+    ma20Trend: ma20Trend, mom20: mom20, mom60: mom60,
+    sharpe: risk.sharpe, calmar: risk.calmar, var95: risk.var95, cvar95: risk.cvar95,
+    annualReturn: risk.annualReturn, maxDrawdown: risk.maxDrawdown, volatility: risk.volatility
+  };
+}
+
+function generateSignal(fund, indicators, macroState) {
+  var rsi = indicators.rsi, macd = indicators.macd, boll = indicators.boll, maStatus = indicators.maStatus;
+  var weight = SECTOR_WEIGHT[fund.sector] || 1.0;
+  var buyScore = 0, sellScore = 0, preBuyScore = 0;
+  var signals = [];
+  
+  if (rsi < 25) { buyScore += 40; signals.push({text:'RSI深度超卖',type:'bull'}); }
+  else if (rsi < 30) { buyScore += 25; signals.push({text:'RSI超卖',type:'bull'}); }
+  else if (rsi < 40) { buyScore += 10; signals.push({text:'RSI偏低',type:'neutral'}); }
+  else if (rsi > 80) { sellScore += 40; signals.push({text:'RSI极度超买',type:'bear'}); }
+  else if (rsi > 75) { sellScore += 25; signals.push({text:'RSI超买',type:'bear'}); }
+  else if (rsi > 65) { sellScore += 10; signals.push({text:'RSI偏高',type:'neutral'}); }
+  else signals.push({text:'RSI中性',type:'neutral'});
+
+  if (macd.cross === '金叉') { buyScore += 30; signals.push({text:'MACD金叉',type:'bull'}); }
+  else if (macd.cross === '死叉') { sellScore += 30; signals.push({text:'MACD死叉',type:'bear'}); }
+  else if (macd.cross === '多头') { buyScore += 10; signals.push({text:'MACD多头',type:'neutral'}); }
+  else if (macd.cross === '空头') { sellScore += 10; signals.push({text:'MACD空头',type:'neutral'}); }
+  else signals.push({text:'MACD中性',type:'neutral'});
+
+  if (boll.pos < 10) { buyScore += 30; preBuyScore += 30; signals.push({text:'布林深度下轨',type:'bull'}); }
+  else if (boll.pos < 20) { buyScore += 15; preBuyScore += 15; signals.push({text:'布林下轨',type:'bull'}); }
+  else if (boll.pos > 90) { sellScore += 30; signals.push({text:'布林深度上轨',type:'bear'}); }
+  else if (boll.pos > 80) { sellScore += 15; signals.push({text:'布林上轨',type:'bear'}); }
+  else signals.push({text:'布林中轨',type:'neutral'});
+
+  if (maStatus === '多头') { buyScore += 15; signals.push({text:'均线多头',type:'bull'}); }
+  else if (maStatus === '空头') { sellScore += 15; signals.push({text:'均线空头',type:'bear'}); }
+  else signals.push({text:'均线纠缠',type:'neutral'});
+
+  if (macroState === 'bullish') { buyScore = Math.round(buyScore * 1.15); signals.push({text:'宏观偏多',type:'bull'}); }
+  else if (macroState === 'bearish') { sellScore = Math.round(sellScore * 1.15); signals.push({text:'宏观偏空',type:'bear'}); }
+
+  if (weight >= 1.15) { buyScore = Math.round(buyScore * weight); preBuyScore = Math.round(preBuyScore * weight); signals.push({text:'政策×' + weight, type:'bull'}); }
+
+  var netScore = buyScore - sellScore;
+  var signal, signalClass;
+
+  var isPrebuyValid = preBuyScore >= 25;
+  if (isPrebuyValid) {
+    if ((macd.cross === '空头' || macd.cross === '死叉') && (indicators.lastClose < indicators.ma5)) {
+        isPrebuyValid = false;
+        signals.push({text:'趋势向下拦截',type:'bear'});
+    }
+  }
+
+  if (netScore >= 55) { signal = '买入'; signalClass = 'sig-buy'; }
+  else if (netScore >= 30) { signal = '偏多'; signalClass = 'sig-buy'; }
+  else if (netScore <= -55) { signal = '卖出'; signalClass = 'sig-sell'; }
+  else if (netScore <= -30) { signal = '偏空'; signalClass = 'sig-sell'; }
+  else if (isPrebuyValid) { signal = '预埋'; signalClass = 'sig-prebuy'; }
+  else { signal = '观望'; signalClass = 'sig-hold'; }
+  
+  return { signal:signal, signalClass:signalClass, signals:signals, netScore:netScore };
+}
+
+function calcActionPlan(fund, indicators, signal, macroHeat) {
+  var lastClose = indicators.lastClose || 1.0;
+  var atr = indicators.atr || 0.01;
+  var weight = SECTOR_WEIGHT[fund.sector] || 1.0;
+  var plan = {};
+  if (currentMode === 'empty') {
+    var posPct = 0;
+    if (signal.signal === '买入') posPct = Math.round(12 * weight);
+    else if (signal.signal === '偏多') posPct = Math.round(7 * weight);
+    else if (signal.signal === '预埋') posPct = Math.round(5 * weight);
+    if (macroHeat > 75) posPct = Math.round(posPct * 0.5);
+    else if (macroHeat < 35) posPct = Math.round(posPct * 1.2);
+    plan.position = posPct;
+    plan.positionLabel = posPct > 0 ? posPct + '%' : '暂不建仓';
+    plan.positionClass = posPct > 0 ? 'green' : '';
+    plan.grid1 = (lastClose * 0.97).toFixed(4);
+    plan.grid2 = (lastClose * 0.94).toFixed(4);
+    plan.grid3 = (lastClose * 0.91).toFixed(4);
+    plan.entryPrice = signal.signal === '预埋' ? plan.grid1 : lastClose.toFixed(4);
+    plan.stopLoss = (lastClose - 2.5 * atr).toFixed(4);
+    plan.takeProfit = (lastClose + 3.5 * atr).toFixed(4);
+    if (signal.signal === '观望') plan.hint = '无信号，暂不操作。';
+    else if (signal.signal === '偏空' || signal.signal === '卖出') plan.hint = '空头信号，不宜建仓。等趋势反转。';
+    else if (signal.signal === '买入') plan.hint = '共振买入，分3批建仓：首笔40%，回踩加30%，突破前高加30%。';
+    else if (signal.signal === '偏多') plan.hint = '偏多信号，小仓位试探。首笔买入建议仓位的50%。';
+    else if (signal.signal === '预埋') plan.hint = '企稳预埋。首笔不超过5%，若继续下跌每跌5%补仓一次，做网格。';
+  } else {
+    plan.stopLoss = (lastClose - 2.5 * atr).toFixed(4);
+    plan.takeProfit1 = (lastClose + 3.5 * atr).toFixed(4);
+    plan.takeProfit2 = (lastClose + 5.5 * atr).toFixed(4);
+    plan.trailing = (2.0 * atr).toFixed(4);
+    if (signal.signal === '卖出') { plan.action = '清仓'; plan.actionClass = 'red'; }
+    else if (signal.signal === '偏空') { plan.action = '减仓50%'; plan.actionClass = 'red'; }
+    else if (signal.signal === '买入') { plan.action = '加仓'; plan.actionClass = 'green'; }
+    else if (signal.signal === '偏多') { plan.action = '持有/小幅加仓'; plan.actionClass = 'green'; }
+    else if (signal.signal === '预埋') { plan.action = '持有/低位补仓'; plan.actionClass = 'purple'; }
+    else { plan.action = '继续持有'; plan.actionClass = 'yellow'; }
+    plan.hint = '止损 ' + plan.stopLoss + ' / 止盈 ' + plan.takeProfit1;
+  }
+  return plan;
+}
+
+function calcMerrillClock() {
+  var stock = fundData[CLOCK_PROXY.stock] && fundData[CLOCK_PROXY.stock].indicators ? fundData[CLOCK_PROXY.stock].indicators : null;
+  var commodity = fundData[CLOCK_PROXY.commodity] && fundData[CLOCK_PROXY.commodity].indicators ? fundData[CLOCK_PROXY.commodity].indicators : null;
+  var bond = fundData[CLOCK_PROXY.bond] && fundData[CLOCK_PROXY.bond].indicators ? fundData[CLOCK_PROXY.bond].indicators : null;
+  var stockMom = stock ? stock.mom20 : 0;
+  var commodityMom = commodity ? commodity.mom20 : 0;
+  var bondMom = bond ? bond.mom20 : 0;
+  var growth = stockMom - bondMom;
+  var inflation = commodityMom;
+  var phase;
+  if (growth > 0 && inflation <= 0) phase = '复苏';
+  else if (growth > 0 && inflation > 0) phase = '过热';
+  else if (growth <= 0 && inflation > 0) phase = '滞胀';
+  else phase = '衰退';
+  return { phase:phase, growth:growth, inflation:inflation };
+}
+function updateClockWidget() {
+  var clock = calcMerrillClock();
+  document.querySelectorAll('.clock-quadrant').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.phase === clock.phase);
+  });
+  return clock.phase;
+}
+
+function renderTrackStats() {
+  var panel = document.getElementById('trackStatsPanel');
+  if (currentView !== 'track') { panel.innerHTML = ''; return; }
+  var stats = getTrackingStats();
+  var buyHitRate = stats.buy.count > 0 ? (stats.buy.wins / stats.buy.count * 100) : 0;
+  var prebuyHitRate = stats.prebuy.count > 0 ? (stats.prebuy.wins / stats.prebuy.count * 100) : 0;
+  var avgReturn = stats.total > 0 ? ((stats.buy.totalReturn + stats.prebuy.totalReturn + stats.leanBuy.totalReturn) / Math.max(1, stats.buy.count + stats.prebuy.count + stats.leanBuy.count)) : 0;
+  var html = '<div class="track-stats">'
+    + '<div class="track-stat"><div class="ts-label">累计信号数</div><div class="ts-val">' + stats.total + '</div><div class="ts-sub">买入' + stats.buy.count + ' · 偏多' + stats.leanBuy.count + ' · 预埋' + stats.prebuy.count + ' · 卖出' + stats.sell.count + '</div></div>'
+    + '<div class="track-stat"><div class="ts-label">买入信号胜率</div><div class="ts-val" style="color:' + (buyHitRate>=60?'var(--green)':buyHitRate>=40?'var(--yellow)':'var(--red)') + '">' + buyHitRate.toFixed(0) + '%</div><div class="ts-sub">' + stats.buy.wins + '/' + stats.buy.count + ' 正收益</div></div>'
+    + '<div class="track-stat"><div class="ts-label">预埋信号胜率</div><div class="ts-val" style="color:' + (prebuyHitRate>=60?'var(--green)':prebuyHitRate>=40?'var(--yellow)':'var(--red)') + '">' + prebuyHitRate.toFixed(0) + '%</div><div class="ts-sub">' + stats.prebuy.wins + '/' + stats.prebuy.count + ' 正收益</div></div>'
+    + '<div class="track-stat"><div class="ts-label">平均收益</div><div class="ts-val" style="color:' + (avgReturn>=0?'var(--green)':'var(--red)') + '">' + (avgReturn>=0?'+':'') + avgReturn.toFixed(2) + '%</div><div class="ts-sub">买入+偏多+预埋平均</div></div>'
+    + '<div class="track-stat"><div class="ts-label">最佳信号</div><div class="ts-val" style="font-size:14px;color:var(--green)">' + (stats.best ? (stats.best.returnPct>=0?'+':'') + stats.best.returnPct.toFixed(2) + '%' : '-') + '</div><div class="ts-sub">' + (stats.best ? stats.best.name : '暂无') + '</div></div>'
+    + '</div>';
+  panel.innerHTML = html;
+}
+
+function renderTabs() {
+  var cats = ['全部'];
+  var seen = {};
+  ALL_FUNDS.forEach(function(f) { if (!seen[f.sector]) { seen[f.sector] = true; cats.push(f.sector); } });
+  document.getElementById('catTabs').innerHTML = cats.map(function(cat) {
+    var count = cat === '全部' ? ALL_FUNDS.length : ALL_FUNDS.filter(function(f) { return f.sector === cat; }).length;
+    return '<button class="cat-tab ' + (cat === activeCategory ? 'active' : '') + '" onclick="switchCat(\'' + cat + '\')">' + cat + '<span class="count">' + count + '</span></button>';
+  }).join('');
+}
+function switchCat(cat) { activeCategory = cat; renderTabs(); render(); }
+
+function getSortedList() {
+  var sort = document.getElementById('sortSelect').value;
+  var list = ALL_FUNDS.map(function(f) {
+    var d = fundData[f.code] || {};
+    var ind = d.indicators || {
+      rsi:50, macd:{cross:'中性'}, boll:{pos:50}, atr:1, atrPct:1, maStatus:'纠缠', pct:0, lastClose:1.0, ma5:1.0,
+      ma20Trend:'-', mom20:0, mom60:0, sharpe:0, calmar:0, var95:0, cvar95:0, annualReturn:0, maxDrawdown:0, volatility:0
+    };
+    var sig = d.signal || generateSignal(f, ind, 'neutral');
+    return Object.assign({}, f, d, { ind:ind, sig:sig });
+  });
+  if (sort === 'signal') { var order = {'买入':6,'偏多':5,'预埋':4,'观望':3,'偏空':2,'卖出':1}; list.sort(function(a,b) { return (order[b.sig.signal]||0) - (order[a.sig.signal]||0) || (b.sig.netScore - a.sig.netScore); }); }
+  else if (sort === 'score_desc') list.sort(function(a,b) { return b.sig.netScore - a.sig.netScore; });
+  else if (sort === 'sharpe_desc') list.sort(function(a,b) { return (b.ind.sharpe||0) - (a.ind.sharpe||0); });
+  else if (sort === 'calmar_desc') list.sort(function(a,b) { return (b.ind.calmar||0) - (a.ind.calmar||0); });
+  else if (sort === 'pct_desc') list.sort(function(a,b) { return b.ind.pct - a.ind.pct; });
+  return list;
+}
+function getFilteredList(list) {
+  var filtered = activeCategory === '全部' ? list : list.filter(function(f) { return f.sector === activeCategory; });
+  if (currentSignalFilter) filtered = filtered.filter(function(f) { return f.sig.signal === currentSignalFilter; });
+  if (document.getElementById('filterSignalOnly').checked) filtered = filtered.filter(function(f) { return f.sig.signal !== '观望'; });
+  return filtered;
+}
+
+function renderCards(filtered, capital) {
+  var grid = document.createElement('div');
+  grid.className = 'grid';
+  var frag = document.createDocumentFragment();
+  filtered.forEach(function(f) {
+    var pctClass = f.ind.pct > 0 ? 'green' : f.ind.pct < 0 ? 'red' : '';
+    var withData = ALL_FUNDS.filter(function(x) { return fundData[x.code] && fundData[x.code].hasData; });
+    var avgPct = withData.length > 0 ? withData.reduce(function(s,x) { return s + fundData[x.code].indicators.pct; },0)/withData.length : 0;
+    var macroHeat = Math.min(100, Math.max(0, 50 + avgPct*5));
+    var plan = calcActionPlan(f, f.ind, f.sig, macroHeat);
+    var amount = Math.round(capital * (plan.position||0) / 100);
+    var card = document.createElement('div');
+    card.className = 'card' + (f.sig.signal !== '观望' ? ' sig-highlight' : '');
+    card.onclick = function() { showDetail(f.code, capital); };
+    var actionHTML = '';
+    if (currentMode === 'empty') {
+      actionHTML = '<div class="action-box"><div class="ab-title">🟢 空仓建仓指令</div>'
+        + '<div class="action-row"><span class="ak">建议仓位</span><span class="av ' + (plan.positionClass||'') + '">' + plan.positionLabel + (amount>0?' ('+amount.toLocaleString()+'元)':'') + '</span></div>'
+        + '<div class="action-row"><span class="ak">首笔建仓价</span><span class="av">' + plan.entryPrice + '</span></div>'
+        + '<div class="action-row"><span class="ak">止损价</span><span class="av red">' + plan.stopLoss + '</span></div>'
+        + '<div class="action-row"><span class="ak">止盈价</span><span class="av green">' + plan.takeProfit + '</span></div>'
+        + '<div style="font-size:10px;color:var(--muted);margin-top:8px;margin-bottom:4px">预埋网格（每跌5%补仓）</div>'
+        + '<div class="grid-row"><div class="grid-item"><div class="gl">第1档</div><div class="gv">' + plan.grid1 + '</div></div>'
+        + '<div class="grid-item"><div class="gl">第2档</div><div class="gv">' + plan.grid2 + '</div></div>'
+        + '<div class="grid-item"><div class="gl">第3档</div><div class="gv">' + plan.grid3 + '</div></div></div></div>';
+    } else {
+      actionHTML = '<div class="action-box"><div class="ab-title">🔵 持仓管理指令</div>'
+        + '<div class="action-row"><span class="ak">操作</span><span class="av ' + (plan.actionClass||'') + '">' + plan.action + '</span></div>'
+        + '<div class="action-row"><span class="ak">止损价</span><span class="av red">' + plan.stopLoss + '</span></div>'
+        + '<div class="action-row"><span class="ak">第一止盈</span><span class="av green">' + plan.takeProfit1 + '</span></div>'
+        + '<div class="action-row"><span class="ak">第二止盈</span><span class="av green">' + plan.takeProfit2 + '</span></div></div>';
+    }
+    card.innerHTML = '<div class="card-header"><div><div class="card-name">' + f.name + '</div><div class="card-code">' + f.code + ' · ' + f.sector + '</div></div><div class="signal-badge ' + f.sig.signalClass + '">' + f.sig.signal + '</div></div>'
+      + '<div class="metrics"><div class="metric"><div class="label">实时涨跌</div><div class="val ' + pctClass + '">' + (f.ind.pct>0?'+':'') + f.ind.pct.toFixed(2) + '%</div></div>'
+      + '<div class="metric"><div class="label">净值</div><div class="val">' + (f.ind.lastClose||0).toFixed(4) + '</div></div></div>'
+      + actionHTML + '<div class="action-hint">' + plan.hint + '</div>';
+    frag.appendChild(card);
+  });
+  grid.appendChild(frag);
+  return grid;
+}
+
+function renderTable(filtered) {
+  var wrap = document.createElement('div');
+  wrap.className = 'table-wrap';
+  if (filtered.length === 0) { wrap.innerHTML = '<div style="padding:60px;text-align:center;color:var(--muted)">当前过滤条件下没有基金。</div>'; return wrap; }
+  var html = '<table class="data-table"><thead><tr>'
+    + '<th>代码</th><th>名称</th><th>赛道</th><th>净值</th><th>涨跌%</th><th>技术评分</th><th>买入等级</th>'
+    + '<th>RSI</th><th>MACD</th><th>MA20趋势</th><th>20日动量%</th><th>60日动量%</th>'
+    + '<th>夏普</th><th>卡玛</th><th>VaR95</th><th>CVaR95</th><th>年化波动%</th></tr></thead><tbody>';
+  filtered.forEach(function(f) {
+    var pct = f.ind.pct || 0;
+    var pctCls = pct > 0 ? 'cell-positive' : pct < 0 ? 'cell-negative' : 'cell-muted';
+    var score = f.sig.netScore || 0;
+    var scoreWidth = Math.min(100, Math.max(0, Math.abs(score)/100*100));
+    var scoreBarCls = score >= 0 ? '' : ' bear';
+    var rsiCls = f.ind.rsi < 30 ? 'cell-positive' : f.ind.rsi > 75 ? 'cell-negative' : '';
+    var macdCls = f.ind.macd.cross === '金叉' || f.ind.macd.cross === '多头' ? 'cell-positive' : f.ind.macd.cross === '死叉' || f.ind.macd.cross === '空头' ? 'cell-negative' : 'cell-muted';
+    var ma20Cls = f.ind.ma20Trend === '向上' ? 'trend-up' : 'trend-down';
+    var sharpeCls = (f.ind.sharpe||0) > 1 ? 'cell-positive' : (f.ind.sharpe||0) < 0 ? 'cell-negative' : 'cell-muted';
+    var calmarCls = (f.ind.calmar||0) > 1 ? 'cell-positive' : (f.ind.calmar||0) < 0 ? 'cell-negative' : 'cell-muted';
+    html += '<tr onclick="showDetail(\'' + f.code + '\', parseFloat(document.getElementById(\'capital\').value)||100000)">'
+      + '<td class="cell-code">' + f.code + '</td><td class="cell-name">' + f.name + '</td><td class="cell-muted">' + f.sector + '</td>'
+      + '<td class="cell-num">' + (f.ind.lastClose||0).toFixed(4) + '</td>'
+      + '<td class="cell-num ' + pctCls + '">' + (pct>0?'+':'') + pct.toFixed(2) + '</td>'
+      + '<td><span class="score-bar"><span class="score-fill' + scoreBarCls + '" style="width:' + scoreWidth + '%"></span></span><span class="cell-num">' + score + '</span></td>'
+      + '<td><span class="level-badge level-' + f.sig.signal + '">' + f.sig.signal + '</span></td>'
+      + '<td class="cell-num ' + rsiCls + '">' + f.ind.rsi.toFixed(1) + '</td>'
+      + '<td class="' + macdCls + '">' + f.ind.macd.cross + '</td>'
+      + '<td class="' + ma20Cls + '">' + f.ind.ma20Trend + '</td>'
+      + '<td class="cell-num ' + (f.ind.mom20>0?'cell-positive':'cell-negative') + '">' + f.ind.mom20.toFixed(2) + '</td>'
+      + '<td class="cell-num ' + (f.ind.mom60>0?'cell-positive':'cell-negative') + '">' + f.ind.mom60.toFixed(2) + '</td>'
+      + '<td class="cell-num ' + sharpeCls + '">' + (f.ind.sharpe||0).toFixed(2) + '</td>'
+      + '<td class="cell-num ' + calmarCls + '">' + (f.ind.calmar||0).toFixed(2) + '</td>'
+      + '<td class="cell-num cell-negative">' + (f.ind.var95||0).toFixed(2) + '%</td>'
+      + '<td class="cell-num cell-negative">' + (f.ind.cvar95||0).toFixed(2) + '%</td>'
+      + '<td class="cell-num cell-muted">' + (f.ind.volatility||0).toFixed(1) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  return wrap;
+}
+
+function renderTrack() {
+  var wrap = document.createElement('div');
+  wrap.className = 'table-wrap';
+  var signals = loadSignals();
+  if (signals.length === 0) {
+    wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
+      + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
+      + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
+      + '<div style="font-size:13px">V9.5 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
+      + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
+      + '</div>';
+    return wrap;
+  }
+  var sorted = signals.slice().sort(function(a,b) { return b.timestamp - a.timestamp; });
+  var html = '<table class="data-table" style="min-width:1300px"><thead><tr>'
+    + '<th>信号时间</th><th>代码</th><th>名称</th><th>赛道</th><th>信号类型</th>'
+    + '<th>基线净值</th><th>当前净值</th><th>累计涨跌%</th><th>持有天数</th>'
+    + '<th>RSI</th><th>MACD</th><th>夏普</th><th>卡玛</th></tr></thead><tbody>';
+  sorted.forEach(function(s) {
+    var retCls = s.returnPct > 0 ? 'cell-positive' : s.returnPct < 0 ? 'cell-negative' : 'cell-muted';
+    var retText = (s.returnPct >= 0 ? '+' : '') + (s.returnPct || 0).toFixed(2) + '%';
+    var dateText = new Date(s.timestamp).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    html += '<tr onclick="showDetail(\'' + s.code + '\', 100000)">'
+      + '<td class="cell-muted">' + dateText + '</td>'
+      + '<td class="cell-code">' + s.code + '</td>'
+      + '<td class="cell-name">' + s.name + '</td>'
+      + '<td class="cell-muted">' + s.sector + '</td>'
+      + '<td><span class="level-badge level-' + s.signal + '">' + s.signal + '</span></td>'
+      + '<td class="cell-num">' + (s.baselineNav||0).toFixed(4) + '</td>'
+      + '<td class="cell-num">' + (s.currentNav||0).toFixed(4) + '</td>'
+      + '<td class="cell-num ' + retCls + '"><strong>' + retText + '</strong></td>'
+      + '<td class="cell-num cell-muted">' + s.days + '天</td>'
+      + '<td class="cell-num cell-muted">' + (s.rsi || '-') + '</td>'
+      + '<td class="cell-muted">' + (s.macd || '-') + '</td>'
+      + '<td class="cell-num cell-muted">' + (s.sharpe || '-') + '</td>'
+      + '<td class="cell-num cell-muted">' + (s.calmar || '-') + '</td>'
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  return wrap;
+}
+
+function render() {
+  var container = document.getElementById('viewContainer');
+  container.innerHTML = '';
+  renderTrackStats();
+  if (currentView === 'track') {
+    container.appendChild(renderTrack());
+    return;
+  }
+  var capital = parseFloat(document.getElementById('capital').value) || 100000;
+  var list = getSortedList();
+  var filtered = getFilteredList(list);
+  if (currentView === 'card') container.appendChild(renderCards(filtered, capital));
+  else container.appendChild(renderTable(filtered));
+}
+
+function showDetail(code, capital) {
+  var fund = ALL_FUNDS.find(function(f) { return f.code === code; });
+  var d = fundData[code] || {};
+  if (!fund || !d.indicators) return;
+  var ind = d.indicators, sig = d.signal;
+  var withData = ALL_FUNDS.filter(function(x) { return fundData[x.code] && fundData[x.code].hasData; });
+  var avgPct = withData.length > 0 ? withData.reduce(function(s,x) { return s + fundData[x.code].indicators.pct; },0)/withData.length : 0;
+  var macroHeat = Math.min(100, Math.max(0, 50 + avgPct*5));
+  var plan = calcActionPlan(fund, ind, sig, macroHeat);
+  var amount = Math.round(capital * (plan.position||0) / 100);
+  var html = '<div class="modal-header"><div><div class="modal-title">' + fund.name + '</div>'
+    + '<div class="modal-code">' + fund.code + ' · ' + fund.sector + ' · 净值 ' + (ind.lastClose||0).toFixed(4) + '</div></div>'
+    + '<button class="modal-close" onclick="closeModal()">×</button></div>'
+    + '<div class="modal-section"><div class="sec-title">📈 技术指标</div><div class="modal-grid-3">'
+    + '<div class="modal-metric"><div class="label">RSI(14)</div><div class="val">' + ind.rsi.toFixed(1) + '</div></div>'
+    + '<div class="modal-metric"><div class="label">MACD</div><div class="val">' + ind.macd.cross + '</div></div>'
+    + '<div class="modal-metric"><div class="label">ATR波动</div><div class="val">' + ind.atrPct.toFixed(2) + '%</div></div>'
+    + '</div></div>'
+    + '<div class="modal-section"><div class="sec-title">🛡️ 风险指标</div><div class="modal-grid-3">'
+    + '<div class="modal-metric"><div class="label">夏普比率</div><div class="val ' + (ind.sharpe>1?'green':'') + '">' + (ind.sharpe||0).toFixed(2) + '</div></div>'
+    + '<div class="modal-metric"><div class="label">卡玛比率</div><div class="val ' + (ind.calmar>1?'green':'') + '">' + (ind.calmar||0).toFixed(2) + '</div></div>'
+    + '<div class="modal-metric"><div class="label">年化收益</div><div class="val">' + (ind.annualReturn||0).toFixed(2) + '%</div></div>'
+    + '<div class="modal-metric"><div class="label">最大回撤</div><div class="val red">-' + (ind.maxDrawdown||0).toFixed(2) + '%</div></div>'
+    + '<div class="modal-metric"><div class="label">95% VaR</div><div class="val red">' + (ind.var95||0).toFixed(2) + '%</div></div>'
+    + '<div class="modal-metric"><div class="label">95% CVaR</div><div class="val red">' + (ind.cvar95||0).toFixed(2) + '%</div></div>'
+    + '</div></div>';
+  if (currentMode === 'empty') {
+    html += '<div class="modal-section"><div class="sec-title">🟢 建仓计划</div><div class="modal-grid-3">'
+      + '<div class="modal-metric"><div class="label">建议仓位</div><div class="val">' + plan.positionLabel + '</div></div>'
+      + '<div class="modal-metric"><div class="label">投入金额</div><div class="val">' + amount.toLocaleString() + '元</div></div>'
+      + '<div class="modal-metric"><div class="label">首笔价</div><div class="val">' + plan.entryPrice + '</div></div>'
+      + '<div class="modal-metric"><div class="label">止损价</div><div class="val red">' + plan.stopLoss + '</div></div>'
+      + '<div class="modal-metric"><div class="label">止盈价</div><div class="val green">' + plan.takeProfit + '</div></div>'
+      + '</div></div>'
+      + '<div class="modal-section"><div class="sec-title">📋 预埋网格</div><div class="modal-grid-3">'
+      + '<div class="modal-metric"><div class="label">第1档 -3%</div><div class="val purple">' + plan.grid1 + '</div></div>'
+      + '<div class="modal-metric"><div class="label">第2档 -6%</div><div class="val purple">' + plan.grid2 + '</div></div>'
+      + '<div class="modal-metric"><div class="label">第3档 -9%</div><div class="val purple">' + plan.grid3 + '</div></div>'
+      + '</div></div>';
+  } else {
+    html += '<div class="modal-section"><div class="sec-title">🔵 持仓管理</div><div class="modal-grid-3">'
+      + '<div class="modal-metric"><div class="label">操作</div><div class="val">' + plan.action + '</div></div>'
+      + '<div class="modal-metric"><div class="label">止损价</div><div class="val red">' + plan.stopLoss + '</div></div>'
+      + '<div class="modal-metric"><div class="label">第一止盈</div><div class="val green">' + plan.takeProfit1 + '</div></div>'
+      + '<div class="modal-metric"><div class="label">第二止盈</div><div class="val green">' + plan.takeProfit2 + '</div></div>'
+      + '</div></div>';
+  }
+  html += '<div class="modal-section"><div class="sec-title">💡 操作建议</div><div class="modal-hint">' + plan.hint + '</div></div>';
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
+
+function setStatus(state, text) {
+  var dot = document.getElementById('statusDot');
+  dot.className = 'dot' + (state === 'error' ? ' error' : state === 'loading' ? ' loading' : '');
+  document.getElementById('updateTime').textContent = text;
+}
+
+async function refreshAll() {
+  setStatus('loading', '正在获取数据...');
+  if (!window.FundApi) { setStatus('error', '数据源未加载，请刷新'); return; }
+
+  cleanOldCache();
+  fetchMarketRadar();
+  fetchSentimentData();
+  initERPChart(); 
+  initSentimentChart();
+
+  var total = ALL_FUNDS.length;
+  var today = new Date().toISOString().slice(0, 10);
+  var CONCURRENCY = 10;
+  var completed = 0;
+  var successCount = 0;
+
+  setStatus('loading', '实时数据 0/' + total);
+  var realtimeMap = {};
+  for (var i = 0; i < total; i += CONCURRENCY) {
+    var batch = ALL_FUNDS.slice(i, i + CONCURRENCY);
+    await Promise.all(batch.map(async function(fund) {
+      try { realtimeMap[fund.code] = await fetchFundData(fund.code); } catch(e) {}
+    }));
+    completed += batch.length;
+    setStatus('loading', '实时数据 ' + Math.min(completed, total) + '/' + total);
+  }
+
+  setStatus('loading', '计算指标 0/' + total);
+  completed = 0;
+  var cacheHits = 0;
+
+  for (var j = 0; j < total; j++) {
+    var fund = ALL_FUNDS[j];
+    var closes = null;
+
+    var cacheKey = 'navHist_' + today + '_' + fund.code;
+    try {
+      var cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        closes = JSON.parse(cached);
+        if (closes && closes.length > 30) cacheHits++;
+        else closes = null;
+      }
+    } catch(e) { closes = null; }
+
+    if (!closes) {
+      try { closes = await fetchHistory(fund.code); } catch(e) {}
+      if (closes && closes.length > 30) {
+        try { localStorage.setItem(cacheKey, JSON.stringify(closes)); } catch(e) {}
+      }
+    }
+
+    var parsed = realtimeMap[fund.code] || null;
+    var ind = calcIndicators(closes, parsed);
+    var macro = calcMacroState();
+    var sig = generateSignal(fund, ind, macro);
+
+    var withData = ALL_FUNDS.filter(function(x) { return fundData[x.code] && fundData[x.code].hasData; });
+    var avgPct = withData.length > 0 ? withData.reduce(function(s,x) { return s + fundData[x.code].indicators.pct; },0)/withData.length : 0;
+    var macroHeat = Math.min(100, Math.max(0, 50 + avgPct*5));
+    var plan = calcActionPlan(fund, ind, sig, macroHeat);
+    fundData[fund.code] = { parsed:parsed, closes:closes, indicators:ind, signal:sig, plan:plan, hasData:!!(closes && closes.length > 30) };
+    if (closes && closes.length > 30) successCount++;
+
+    if (sig.signal === '买入' || sig.signal === '卖出' || sig.signal === '预埋') {
+      addSignal({
+        code: fund.code, name: fund.name, sector: fund.sector, signal: sig.signal,
+        baselineNav: ind.lastClose, currentNav: ind.lastClose, returnPct: 0, days: 0,
+        rsi: ind.rsi.toFixed(1), macd: ind.macd.cross,
+        sharpe: (ind.sharpe||0).toFixed(2), calmar: (ind.calmar||0).toFixed(2),
+        var95: (ind.var95||0).toFixed(2), cvar95: (ind.cvar95||0).toFixed(2),
+        hint: plan.hint
+      });
+    }
+
+    completed++;
+    if (completed % 10 === 0 || completed === total) {
+      setStatus('loading', '计算指标 ' + completed + '/' + total + ' (缓存命中' + cacheHits + ')');
+    }
+  }
+
+  updateSignalTracking();
+
+  renderTabs(); render(); updateRadar(); updateMacro(); updateClockWidget();
+  var now = new Date();
+  var sigCount = loadSignals().length;
+  setStatus(successCount > 0 ? 'ok' : 'error',
+    now.toLocaleTimeString('zh-CN') + ' · 成功' + successCount + '/' + total +
+    ' · 累计信号 ' + sigCount + ' 条');
+}
+
+function calcMacroState() {
+  var withData = ALL_FUNDS.filter(function(f) { return fundData[f.code] && fundData[f.code].hasData; });
+  if (withData.length === 0) return 'neutral';
+  var avgPct = withData.reduce(function(s,f) { return s + (fundData[f.code].indicators.pct || 0); }, 0) / withData.length;
+  if (avgPct > 1.5) return 'bullish';
+  if (avgPct < -1.5) return 'bearish';
+  return 'neutral';
+}
+
+function updateRadar() {
+  var counts = {'买入':0,'偏多':0,'预埋':0,'观望':0,'偏空':0,'卖出':0};
+  ALL_FUNDS.forEach(function(f) {
+    var d = fundData[f.code];
+    if (d && d.signal) counts[d.signal.signal]++;
+    else counts['观望']++;
+  });
+  document.getElementById('rBuy').textContent = counts['买入'];
+  document.getElementById('rLeanBuy').textContent = counts['偏多'];
+  document.getElementById('rPreBuy').textContent = counts['预埋'];
+  document.getElementById('rHold').textContent = counts['观望'];
+  document.getElementById('rLeanSell').textContent = counts['偏空'];
+  document.getElementById('rSell').textContent = counts['卖出'];
+}
+
+function updateMacro() {
+  var withData = ALL_FUNDS.filter(function(f) { return fundData[f.code] && fundData[f.code].hasData; });
+  var avgPct = withData.length > 0 ? withData.reduce(function(s,f) { return s + fundData[f.code].indicators.pct; },0)/withData.length : 0;
+  var heat = Math.min(100, Math.max(0, 50 + avgPct*5));
+  document.getElementById('mErp').textContent = heat>60?'偏高':heat<40?'偏低':'中性';
+  document.getElementById('mErp').style.color = heat>60?'var(--green)':heat<40?'var(--red)':'var(--yellow)';
+  document.getElementById('mErpSub').textContent = '热度 ' + heat.toFixed(0) + '/100';
+  
+  var clock = calcMerrillClock();
+  var basePos = heat>75?'30%':heat>60?'50%':heat>45?'65%':heat>30?'80%':'90%';
+  if (clock.phase==='衰退') basePos = '30%';
+  else if (clock.phase==='滞胀') basePos = '40%';
+  else if (clock.phase==='过热') basePos = '60%';
+  else if (clock.phase==='复苏') basePos = '80%';
+  document.getElementById('mPos').textContent = basePos;
+  document.getElementById('mPos').style.color = 'var(--green)';
+  document.getElementById('mPosSub').textContent = '美林时钟：' + clock.phase;
+}
+
+function addFund() {
+  var code = document.getElementById('fundInput').value.trim();
+  if (!/^\d{6}$/.test(code)) { alert('请输入6位基金代码'); return; }
+  if (ALL_FUNDS.find(function(f) { return f.code === code; })) { alert('该基金已在列表中'); return; }
+  ALL_FUNDS.push({ code:code, name:'基金'+code, sector:'宽基' });
+  document.getElementById('fundInput').value = '';
+  renderTabs();
+  refreshAll();
+}
+
+async function init() {
+  ALL_FUNDS.forEach(function(f) {
+    var ind = calcIndicators(null, null);
+    fundData[f.code] = { indicators:ind, signal:generateSignal(f, ind, 'neutral'), hasData:false };
+  });
+  renderTabs(); render(); updateRadar(); updateMacro(); updateClockWidget();
+
+  var waitCount = 0;
+  var waitTimer = setInterval(function() {
+    waitCount++;
+    if (window.FundApi) {
+      clearInterval(waitTimer);
+      refreshAll();
+    } else if (waitCount > 20) {
+      clearInterval(waitTimer);
+      setStatus('error', '数据源加载超时，请刷新页面');
+    }
+  }, 500);
+}
+init();
 </script>
 </body>
 </html>
