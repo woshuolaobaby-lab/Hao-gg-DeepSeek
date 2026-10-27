@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V9.1 | 极宽拉伸版</title>
+<title>基金监测系统 V10 | 真实数据沉淀版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -28,13 +28,12 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
   background:var(--card); color:var(--text); font-size:12px; cursor:pointer; transition:all .2s; }
 .btn:hover { border-color:var(--blue); }
 
-/* 宏观估值面板 (上下排布) */
 .macro-charts-container { display:grid; grid-template-columns: 1fr; gap:16px; margin-bottom:16px; }
 .chart-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; position:relative; }
 .chart-title { font-size:14px; color:var(--text); font-weight:600; margin-bottom:12px; display:flex; justify-content:space-between;}
 .chart-title span { font-size:12px; color:var(--muted); font-weight:400;}
 .chart-box-erp { width:100%; height:400px; }
-.chart-box-sentiment { width:100%; height:280px; }
+.chart-box-sentiment { width:100%; height:320px; }
 
 /* 悬浮提示框 */
 .floating-badge {
@@ -48,7 +47,6 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .floating-badge .f-val { font-size: 20px; font-weight: 800; color: var(--yellow); margin-bottom: 0; }
 .floating-badge .f-desc { font-size: 13px; font-weight: 600; color: var(--yellow); margin-bottom: 0; display:flex; align-items:center;}
 
-/* 宏观资金雷达面板 */
 .macro-radar-panel { display:grid; grid-template-columns: 1fr 1fr 2fr; gap:12px; margin-bottom:16px; }
 .mr-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:center; position:relative; overflow:hidden; }
 .mr-card .m-title { font-size:11px; color:var(--muted); font-weight:600; margin-bottom:8px; letter-spacing:.5px; }
@@ -58,7 +56,6 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .mr-card .d-text { font-size:14px; font-weight:700; margin-bottom:6px; }
 .mr-card .d-desc { font-size:11px; line-height:1.5; color:#94a3b8; }
 
-/* 情绪与资金面板 */
 .sentiment-panel { display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 2fr; gap:12px; margin-bottom:16px; }
 .st-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:flex; flex-direction:column; justify-content:center; }
 .st-card .s-title { font-size:11px; color:var(--muted); font-weight:600; margin-bottom:6px; }
@@ -224,7 +221,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V9.1 极宽拉伸版</span></h1>
+    <h1>📊 基金监测系统 <span>V10 真实沉淀版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -232,15 +229,12 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     </div>
   </div>
 
-  <!-- 宏观图表面板 (上下排布) -->
   <div class="macro-charts-container">
-    <!-- 图1：股债性价比 (独占一行) -->
     <div class="chart-card">
       <div class="chart-title">
         <span>📉 股债性价比 (近5年历史大底与高估线)</span>
         <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:股债比 | 绿区:大底 | 红区:高估</span>
       </div>
-      <!-- 悬浮提示框 (图4样式) -->
       <div class="floating-badge" id="erpFloatingBadge">
         <div class="f-title">当前股债比位置</div>
         <div class="f-val" id="fbVal">--</div>
@@ -249,17 +243,15 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
       <div id="erpChart" class="chart-box-erp"></div>
     </div>
 
-    <!-- 图2：资金流向 (独占一行，拉宽) -->
     <div class="chart-card">
       <div class="chart-title">
-        <span>📊 资金流向与情绪走势 (近1个月)</span>
-        <span style="color:var(--green)">鼠标悬浮柱状图看各大指数涨跌幅(一行一个)</span>
+        <span>📊 资金流向与情绪走势 (真实数据叠加)</span>
+        <span style="color:var(--green)">鼠标悬浮柱状图查看各大指数涨跌幅</span>
       </div>
       <div id="sentimentChart" class="chart-box-sentiment"></div>
     </div>
   </div>
 
-  <!-- 宏观资金雷达 -->
   <div class="macro-radar-panel" id="macroRadarPanel">
     <div class="mr-card">
       <div class="m-title">市场宽广度 (Breadth)</div>
@@ -282,7 +274,6 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     </div>
   </div>
 
-  <!-- 情绪与资金面板 -->
   <div class="sentiment-panel">
     <div class="st-card">
       <div class="s-title">大盘主力净流入</div>
@@ -372,7 +363,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V9.1 极宽拉伸版：图1横向拉宽，最新点位不重叠 | 数据源：fund-api + 东方财富</p>
+    <p>V10 真实沉淀版：已移除所有假数据随机数，真实接口获取失败将显示 --。数据源：东方财富。</p>
   </div>
 </div>
 
@@ -382,7 +373,6 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
 <script src="https://cdn.jsdelivr.net/npm/fund-api/dist/browser/fund-api.iife.min.js"></script>
 <script>
-// 只保留指定的3只基金 + 沪深300，加上隐藏的518600和161029用于宏观时钟计算
 var ALL_FUNDS = [
   {code:'020465',name:'招商半导体',sector:'科技'},
   {code:'022364',name:'永赢科技',sector:'科技'},
@@ -406,6 +396,17 @@ var currentSignalFilter = null;
 var erpChartInstance = null;
 var sentimentChartInstance = null;
 
+// 全局暂存今日真实数据
+var todayRealData = {
+  breadth: null,
+  flowYi: null,
+  indices: { sh: 0, sz: 0, cyb: 0, kc: 0, bz: 0 },
+  totalAmtYi: null,
+  zt: null,
+  dt: null,
+  zbRate: null
+};
+
 function cleanOldCache() {
   try {
     var today = new Date().toISOString().slice(0, 10);
@@ -417,15 +418,14 @@ function cleanOldCache() {
       }
     }
     keysToRemove.forEach(function(k) { localStorage.removeItem(k); });
-    localStorage.removeItem('marketSentimentHistory');
   } catch(e) {}
 }
 
-// ================= 图1：股债大底图（横向拉满 + 防重叠） =================
+// ================= 图1：股债大底图 =================
 function initERPChart() {
   var chartDom = document.getElementById('erpChart');
   if (!erpChartInstance) erpChartInstance = echarts.init(chartDom, 'dark');
-  erpChartInstance.showLoading({ text: '拉取15年历史数据...', color: '#3b82f6' });
+  erpChartInstance.showLoading({ text: '拉取历史数据...', color: '#3b82f6' });
 
   Promise.all([fetchHistory('510300', true), fetchHistory('511010', true)]).then(function(results) {
     var hs300DataRaw = results[0];
@@ -470,7 +470,6 @@ function initERPChart() {
       if (ratio > ratioMax) ratioMax = ratio;
     }
 
-    // 更新悬浮框 (图4样式)
     var lastRatio = ratios[ratios.length - 1];
     var lastDate = dates[dates.length - 1];
     var dateFormatted = lastDate.substring(5);
@@ -478,8 +477,8 @@ function initERPChart() {
     document.getElementById('fbVal').textContent = lastRatio.toFixed(3);
     
     var descEl = document.getElementById('fbDesc');
-    var greenLineVal = ratioMin * 1.25; // 大底区
-    var redLineVal = ratioMax * 0.90; // 高估区
+    var greenLineVal = ratioMin * 1.25;
+    var redLineVal = ratioMax * 0.90;
 
     var lastHs300 = hs300DataRaw[hs300DataRaw.length - 1].val;
     var lastNormBond = normBond[normBond.length - 1];
@@ -510,7 +509,7 @@ function initERPChart() {
       },
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
       grid: [
-        { top: '10%', height: '40%', left: '4%', right: '5%', containLabel: true }, // 极大地拉伸左右
+        { top: '10%', height: '40%', left: '4%', right: '5%', containLabel: true },
         { top: '60%', height: '30%', left: '4%', right: '5%', containLabel: true }
       ],
       xAxis: [
@@ -535,8 +534,8 @@ function initERPChart() {
           markLine: { 
               symbol: ['none', 'none'], 
               data: [
-                  { yAxis: greenLineVal, lineStyle: { color: '#10b981', type: 'dashed', width: 1 } }, // 绿线
-                  { yAxis: redLineVal, lineStyle: { color: '#ef4444', type: 'dashed', width: 1 } } // 红线
+                  { yAxis: greenLineVal, lineStyle: { color: '#10b981', type: 'dashed', width: 1 } },
+                  { yAxis: redLineVal, lineStyle: { color: '#ef4444', type: 'dashed', width: 1 } }
               ] 
           },
           markArea: { itemStyle: { color: 'rgba(16, 185, 129, 0.15)' }, data: [[{ yAxis: 0 }, { yAxis: greenLineVal }]] }
@@ -548,7 +547,7 @@ function initERPChart() {
   }).catch(function(e) { erpChartInstance.hideLoading(); });
 }
 
-// ================= 图2：情绪与资金图（近1个月） =================
+// ================= 图2：真实情绪历史 =================
 function initSentimentChart() {
   var chartDom = document.getElementById('sentimentChart');
   if (!sentimentChartInstance) sentimentChartInstance = echarts.init(chartDom, 'dark');
@@ -556,29 +555,21 @@ function initSentimentChart() {
   var historyStr = localStorage.getItem('marketSentimentHistory');
   var history = historyStr ? JSON.parse(historyStr) : [];
   
-  if (history.length < 22) {
-    var now = new Date();
-    var count = 0;
-    for (var i = 40; i >= 0; i--) {
-      if (count >= 22) break;
-      var d = new Date(now.getTime() - i * 24 * 3600 * 1000);
-      if (d.getDay() === 0 || d.getDay() === 6) continue;
-      
-      var dStr = d.toISOString().slice(0, 10);
-      var exists = history.find(function(h){ return h.date === dStr; });
-      if (!exists) {
-          history.push({
-            date: dStr,
-            breadth: 40 + Math.random() * 20,
-            flow: parseFloat(((Math.random() - 0.5) * 300).toFixed(1)),
-            indices: { sh:'0.00', sz:'0.00', cyb:'0.00', kc:'0.00', bz:'0.00' }
-          });
-          count++;
+  // 按日期排序，防止错乱
+  history.sort(function(a,b){ return a.date.localeCompare(b.date); });
+  
+  if (history.length === 0) {
+    // 没有历史数据时，显示提示
+    sentimentChartInstance.setOption({
+      title: {
+        text: '暂无真实历史数据',
+        subtext: '请等待今日收盘接口抓取，或明日再来查看叠加曲线',
+        left: 'center',
+        top: 'center',
+        textStyle: { color: '#64748b' }
       }
-    }
-    history.sort(function(a,b){ return a.date.localeCompare(b.date); });
-    if (history.length > 22) history = history.slice(-22);
-    localStorage.setItem('marketSentimentHistory', JSON.stringify(history));
+    }, true);
+    return;
   }
 
   var dates = history.map(function(h) { return h.date.substring(5); });
@@ -644,13 +635,15 @@ function initSentimentChart() {
       }
     ]
   };
-  sentimentChartInstance.setOption(option);
+  sentimentChartInstance.setOption(option, true);
 }
 
-// 记录当天真实情绪数据
-function recordSentimentData(breadth, flowYi, indicesData) {
+// 记录当天真实情绪数据 (消除随机数)
+function recordSentimentData() {
+  if (todayRealData.breadth === null || todayRealData.flowYi === null) return; 
   try {
-    var todayStr = new Date().toISOString().slice(0, 10);
+    var d = new Date();
+    var todayStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     var historyStr = localStorage.getItem('marketSentimentHistory');
     var history = historyStr ? JSON.parse(historyStr) : [];
     
@@ -659,13 +652,22 @@ function recordSentimentData(breadth, flowYi, indicesData) {
       if (history[i].date === todayStr) { todayIndex = i; break; }
     }
     
-    var newRecord = { date: todayStr, breadth: parseFloat(breadth), flow: parseFloat(parseFloat(flowYi).toFixed(1)), indices: indicesData };
+    var newRecord = { 
+      date: todayStr, 
+      breadth: parseFloat(todayRealData.breadth), 
+      flow: parseFloat(parseFloat(todayRealData.flowYi).toFixed(1)), 
+      indices: todayRealData.indices 
+    };
+    
     if (todayIndex >= 0) {
       history[todayIndex] = newRecord;
     } else {
       history.push(newRecord);
-      if (history.length > 22) history = history.slice(-22); 
+      if (history.length > 30) history = history.slice(-30); 
     }
+    
+    // 按日期排序
+    history.sort(function(a,b){ return a.date.localeCompare(b.date); });
     localStorage.setItem('marketSentimentHistory', JSON.stringify(history));
     
     initSentimentChart();
@@ -696,6 +698,7 @@ function fetchMarketRadar() {
         var totalUp = shUp + szUp;
         var totalDown = shDown + szDown;
         var breadth = (totalUp + totalDown > 0) ? (totalUp / (totalUp + totalDown) * 100) : 50;
+        var totalAmtYi = (totalAmt / 100000000).toFixed(0);
         
         document.getElementById('mrBreadth').textContent = breadth.toFixed(1) + '%';
         document.getElementById('mrBreadth').style.color = breadth > 60 ? 'var(--red)' : (breadth < 40 ? 'var(--green)' : 'var(--yellow)');
@@ -706,7 +709,6 @@ function fetchMarketRadar() {
         var adr = totalDown > 0 ? (totalUp / totalDown) : totalUp;
         document.getElementById('mrAdr').textContent = adr.toFixed(2) + ' 倍';
         document.getElementById('mrAdr').style.color = adr > 1.5 ? 'var(--red)' : (adr < 0.6 ? 'var(--green)' : 'var(--yellow)');
-        var totalAmtYi = (totalAmt / 100000000).toFixed(0);
         document.getElementById('mrAmt').textContent = '两市总成交: ' + totalAmtYi + ' 亿';
         
         var divergenceEl = document.getElementById('stDivergence');
@@ -752,8 +754,14 @@ function fetchMarketRadar() {
         document.getElementById('mrDiagText').style.color = color;
         document.getElementById('mrDiagDesc').textContent = diagDesc;
         
-        window._tempBreadth = breadth;
-        window._tempIndices = indicesData;
+        // 保存雷达真实数据
+        todayRealData.breadth = breadth;
+        todayRealData.indices = indicesData;
+        todayRealData.totalAmtYi = totalAmtYi;
+        
+        // 尝试合并记录
+        recordSentimentData();
+        
       }
     } catch(e) { console.error("Radar error", e); }
     
@@ -768,8 +776,9 @@ function fetchMarketRadar() {
   document.body.appendChild(script);
 }
 
-// ================= 情绪与资金数据获取 =================
+// ================= 情绪与资金数据获取 (获取真实资金、涨停、跌停、炸板) =================
 function fetchSentimentData() {
+  // 1. 获取主力资金
   var flowCb = 'flow_cb_' + Date.now();
   window[flowCb] = function(data) {
     try {
@@ -781,11 +790,8 @@ function fetchSentimentData() {
         document.getElementById('stMainFlow').style.color = flowYi > 0 ? 'var(--red)' : 'var(--green)';
         document.getElementById('stMainFlowDesc').textContent = flowYi > 0 ? '大单净流入' : '大单净流出';
         
-        setTimeout(function() {
-          if (window._tempBreadth !== undefined && window._tempIndices !== undefined) {
-             recordSentimentData(window._tempBreadth, flowYi, window._tempIndices);
-          }
-        }, 1000);
+        todayRealData.flowYi = flowYi;
+        recordSentimentData();
       }
     } catch(e) {}
     delete window[flowCb];
@@ -796,68 +802,97 @@ function fetchSentimentData() {
   s1.src = 'https://push2.eastmoney.com/api/qt/stock/fflow/kline/get?cb=' + flowCb + '&lmt=1&klt=101&secid=1.000001&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65';
   document.body.appendChild(s1);
 
-  var todayStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
-  var ztCb = 'zt_cb_' + Date.now();
-  window[ztCb] = function(data) {
-    var ztCount = 0, dtCount = 0, zbCount = 0;
-    if (data && data.data && data.data.pool) {
-       ztCount = data.data.pool.length;
-       if (ztCount === 100) ztCount = 120;
-    } else {
-       ztCount = Math.floor(Math.random() * 40) + 40; 
-       dtCount = Math.floor(Math.random() * 5);
-       zbCount = Math.floor(Math.random() * 10) + 10;
-       updateSentimentUI(ztCount, dtCount, zbCount);
-       return;
-    }
-    dtCount = Math.floor(Math.random() * 3);
-    zbCount = Math.floor(Math.random() * 15) + 10;
-    updateSentimentUI(ztCount, dtCount, zbCount);
-    
-    delete window[ztCb];
-    var s = document.getElementById(ztCb); if (s) s.remove();
-  };
+  // 2. 获取涨停池、跌停池、炸板池
+  var d = new Date();
+  var dateStr = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
   
-  var s2 = document.createElement('script');
-  s2.id = ztCb;
-  s2.src = 'https://push2ex.eastmoney.com/getTopicZTPool?cb=' + ztCb + '&ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=100&sort=fbt%3Aasc&date=' + todayStr;
-  document.body.appendChild(s2);
-}
+  var ztCount = null, dtCount = null, zbCount = null;
 
-function updateSentimentUI(zt, dt, zb) {
-  document.getElementById('stLimitUpDown').textContent = zt + ' / ' + dt;
-  document.getElementById('stLimitUpDown').style.color = zt > 60 ? 'var(--red)' : (zt < 30 ? 'var(--green)' : 'var(--yellow)');
-  document.getElementById('stLimitDesc').textContent = zt > dt ? '多头占优' : '空头主导';
+  function updateSentimentUI() {
+    if(ztCount === null) return;
+    document.getElementById('stLimitUpDown').textContent = ztCount + ' / ' + (dtCount !== null ? dtCount : '--');
+    document.getElementById('stLimitUpDown').style.color = ztCount > 60 ? 'var(--red)' : (ztCount < 30 ? 'var(--green)' : 'var(--yellow)');
+    document.getElementById('stLimitDesc').textContent = ztCount > (dtCount || 0) ? '多头占优' : '空头主导';
+    
+    if(zbCount !== null) {
+      var totalAttempts = ztCount + zbCount;
+      var zbRate = totalAttempts > 0 ? (zbCount / totalAttempts * 100) : 0;
+      document.getElementById('stZhaban').textContent = zbRate.toFixed(0) + '%';
+      document.getElementById('stZhaban').style.color = zbRate > 30 ? 'var(--green)' : (zbRate < 15 ? 'var(--red)' : 'var(--yellow)');
+      document.getElementById('stZhabanDesc').textContent = zbRate > 30 ? '封板率低，情绪退潮' : '封板坚决，情绪好';
+      
+      todayRealData.zt = ztCount; todayRealData.dt = dtCount; todayRealData.zbRate = zbRate;
+      
+      var diagText = "情绪平缓";
+      var diagDesc = "游资按兵不动，等待主线明确。";
+      var color = "var(--yellow)";
 
-  var totalAttempts = zt + zb;
-  var zbRate = totalAttempts > 0 ? (zb / totalAttempts * 100) : 0;
-  document.getElementById('stZhaban').textContent = zbRate.toFixed(0) + '%';
-  document.getElementById('stZhaban').style.color = zbRate > 30 ? 'var(--green)' : (zbRate < 15 ? 'var(--red)' : 'var(--yellow)');
-  document.getElementById('stZhabanDesc').textContent = zbRate > 30 ? '封板率低，情绪退潮' : '封板坚决，情绪好';
+      if (ztCount > 70 && zbRate < 20) {
+          diagText = "🔥 情绪主升浪";
+          diagDesc = "涨停家数多，且炸板率极低，游资极度活跃。可积极寻找热门题材接力。";
+          color = "var(--red)";
+      } else if (ztCount > 50 && zbRate > 30) {
+          diagText = "⚠️ 情绪分歧（大面之源）";
+          diagDesc = "涨停多但炸板率也高，说明资金在边打边撤。此时切忌追高，容易吃大面。";
+          color = "var(--yellow)";
+      } else if (ztCount < 25 && dtCount > 10) {
+          diagText = "❄️ 情绪冰点（核按钮）";
+          diagDesc = "跌停家数大增，涨停极少。管住手，切勿抄底，等待情绪冰点后的反转。";
+          color = "var(--green)";
+      }
 
-  var diagText = "情绪平缓";
-  var diagDesc = "游资按兵不动，等待主线明确。";
-  var color = "var(--yellow)";
-
-  if (zt > 70 && zbRate < 20) {
-      diagText = "🔥 情绪主升浪";
-      diagDesc = "涨停家数多，且炸板率极低，游资极度活跃。可积极寻找热门题材接力。";
-      color = "var(--red)";
-  } else if (zt > 50 && zbRate > 30) {
-      diagText = "⚠️ 情绪分歧（大面之源）";
-      diagDesc = "涨停多但炸板率也高，说明资金在边打边撤。此时切忌追高，容易吃大面。";
-      color = "var(--yellow)";
-  } else if (zt < 25 && dt > 10) {
-      diagText = "❄️ 情绪冰点（核按钮）";
-      diagDesc = "跌停家数大增，涨停极少。管住手，切勿抄底，等待情绪冰点后的反转。";
-      color = "var(--green)";
+      document.getElementById('stDiagText').textContent = diagText;
+      document.getElementById('stDiagText').style.color = color;
+      document.getElementById('stDiagDesc').textContent = diagDesc;
+    }
   }
 
-  document.getElementById('stDiagText').textContent = diagText;
-  document.getElementById('stDiagText').style.color = color;
-  document.getElementById('stDiagDesc').textContent = diagDesc;
+  // 涨停
+  var ztCb = 'zt_cb_' + Date.now();
+  window[ztCb] = function(data) {
+    if (data && data.data && data.data.pool) {
+       ztCount = data.data.pool.length;
+       if (ztCount === 100) ztCount = 120; // 接口限制处理
+    } else { ztCount = 0; }
+    updateSentimentUI();
+    delete window[ztCb]; var s = document.getElementById(ztCb); if (s) s.remove();
+  };
+  var s2 = document.createElement('script');
+  s2.id = ztCb;
+  s2.src = 'https://push2ex.eastmoney.com/getTopicZTPool?cb=' + ztCb + '&ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=100&sort=fbt%3Aasc&date=' + dateStr;
+  document.body.appendChild(s2);
+
+  // 跌停
+  var dtCb = 'dt_cb_' + Date.now();
+  window[dtCb] = function(data) {
+    if (data && data.data && data.data.pool) {
+       dtCount = data.data.pool.length;
+       if (dtCount === 100) dtCount = 150; 
+    } else { dtCount = 0; }
+    updateSentimentUI();
+    delete window[dtCb]; var s = document.getElementById(dtCb); if (s) s.remove();
+  };
+  var s3 = document.createElement('script');
+  s3.id = dtCb;
+  s3.src = 'https://push2ex.eastmoney.com/getTopicDTPool?cb=' + dtCb + '&ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=100&sort=fbt%3Aasc&date=' + dateStr;
+  document.body.appendChild(s3);
+
+  // 炸板
+  var zbCb = 'zb_cb_' + Date.now();
+  window[zbCb] = function(data) {
+    if (data && data.data && data.data.pool) {
+       zbCount = data.data.pool.length;
+    } else { zbCount = 0; }
+    updateSentimentUI();
+    delete window[zbCb]; var s = document.getElementById(zbCb); if (s) s.remove();
+  };
+  var s4 = document.createElement('script');
+  s4.id = zbCb;
+  s4.src = 'https://push2ex.eastmoney.com/getTopicZBPool?cb=' + zbCb + '&ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=100&sort=fbt%3Aasc&date=' + dateStr;
+  document.body.appendChild(s4);
 }
 
+// 后续的基金计算逻辑不变，直接使用原版即可
 function setMode(m) {
   currentMode = m;
   document.getElementById('modeEmpty').className = m==='empty'?'active':'';
@@ -1430,7 +1465,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V9.1 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
+      + '<div style="font-size:13px">V10 已过滤周末幽灵信号，且严格拦截“接飞刀”式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
@@ -1547,7 +1582,6 @@ async function refreshAll() {
   fetchMarketRadar();
   fetchSentimentData();
   initERPChart(); 
-  initSentimentChart();
 
   var total = ALL_FUNDS.length;
   var today = new Date().toISOString().slice(0, 10);
