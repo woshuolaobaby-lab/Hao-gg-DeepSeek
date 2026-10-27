@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V10.1 | 12年数据海外优化版</title>
+<title>基金监测系统 V10.2 | 核心宏观版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
-/* 基础样式保持原版 */
+/* ========== 基础与全局样式 ========== */
 * { margin:0; padding:0; box-sizing:border-box; }
 :root {
   --bg:#0a0e17; --card:#111827; --border:#1e293b;
@@ -16,6 +16,8 @@
 body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
   background:var(--bg); color:var(--text); min-height:100vh; padding:16px; font-size:14px; }
 .container { max-width:1500px; margin:0 auto; }
+
+/* ========== 头部 ========== */
 .header { display:flex; justify-content:space-between; align-items:center;
   padding:16px 0; border-bottom:1px solid var(--border); margin-bottom:16px; flex-wrap:wrap; gap:12px; }
 .header h1 { font-size:20px; font-weight:700; }
@@ -29,26 +31,26 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
   background:var(--card); color:var(--text); font-size:12px; cursor:pointer; transition:all .2s; }
 .btn:hover { border-color:var(--blue); }
 
-/* 宏观图表面板 */
+/* ========== 图表面板 ========== */
 .macro-charts-container { display:grid; grid-template-columns: 1fr; gap:16px; margin-bottom:16px; }
 .chart-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; position:relative; }
-.chart-title { font-size:14px; color:var(--text); font-weight:600; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;}
-.chart-title > div { display: flex; align-items: center; gap: 16px; }
+.chart-title { font-size:14px; color:var(--text); font-weight:600; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;}
+.chart-title-left { display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
 .chart-title span { font-size:12px; color:var(--muted); font-weight:400;}
 .chart-box-erp { width:100%; height:400px; }
-.chart-box-sentiment { width:100%; height:300px; }
+.chart-box-sentiment { width:100%; height:280px; }
 
-/* 悬浮提示框 */
+/* 修改点：悬浮框改为内联样式（图2的样子） */
 .floating-badge {
     display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.15);
-    padding: 4px 12px; border-radius: 8px;
+    background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.15);
+    padding: 4px 12px; border-radius: 6px;
 }
 .floating-badge .f-title { font-size: 12px; color: var(--muted); margin: 0; }
-.floating-badge .f-val { font-size: 18px; font-weight: 800; color: var(--yellow); margin: 0; line-height: 1; }
+.floating-badge .f-val { font-size: 16px; font-weight: 800; color: var(--yellow); margin: 0; line-height: 1; }
 .floating-badge .f-desc { font-size: 12px; font-weight: 600; margin: 0; }
 
-/* 宏观资金雷达面板 */
+/* ========== 宏观资金雷达面板 ========== */
 .macro-radar-panel { display:grid; grid-template-columns: 1fr 1fr 2fr; gap:12px; margin-bottom:16px; }
 .mr-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:center; position:relative; overflow:hidden; }
 .mr-card .m-title { font-size:11px; color:var(--muted); font-weight:600; margin-bottom:8px; letter-spacing:.5px; }
@@ -58,7 +60,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .mr-card .d-text { font-size:14px; font-weight:700; margin-bottom:6px; }
 .mr-card .d-desc { font-size:11px; line-height:1.5; color:#94a3b8; }
 
-/* 情绪与资金面板 */
+/* ========== 情绪与资金面板 ========== */
 .sentiment-panel { display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 2fr; gap:12px; margin-bottom:16px; }
 .st-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:flex; flex-direction:column; justify-content:center; }
 .st-card .s-title { font-size:11px; color:var(--muted); font-weight:600; margin-bottom:6px; }
@@ -72,12 +74,20 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .breadth-up { height:100%; background:var(--red); transition:width .5s; }
 .breadth-down { height:100%; background:var(--green); transition:width .5s; }
 
+/* ========== 沪深300面板 (新增) ========== */
+.hs300-panel { display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px; }
+.hs300-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; display:flex; align-items:center; justify-content:space-between; }
+.hs300-card .hs-title { font-size:16px; font-weight:700; color:var(--text); }
+.hs300-card .hs-sub { font-size:12px; color:var(--muted); margin-top:4px; }
+.hs300-card .hs-price { font-size:36px; font-weight:800; line-height:1; }
+.hs300-card .hs-change { font-size:18px; font-weight:700; margin-top:8px; }
+
+/* ========== 宏观综合面板 (美林时钟) ========== */
 .macro-panel { display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px; margin-bottom:16px; }
 .macro-item { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; }
 .macro-item .mlabel { font-size:11px; color:var(--muted); margin-bottom:4px; }
 .macro-item .mval { font-size:20px; font-weight:700; }
 .macro-item .msub { font-size:10px; color:var(--muted); margin-top:2px; }
-
 .clock-widget { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
 .clock-quadrant { padding:10px 8px; border-radius:8px; text-align:center; font-size:11px; border:1px solid rgba(255,255,255,.06); position:relative; }
 .clock-quadrant .q-name { font-weight:700; font-size:12px; margin-bottom:2px; }
@@ -85,40 +95,46 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .clock-quadrant.active { border-color:var(--blue); box-shadow:0 0 0 2px rgba(59,130,246,.4); background:rgba(59,130,246,.12); }
 .clock-quadrant.active::after { content:'当前'; position:absolute; top:-8px; right:6px; background:var(--blue); color:#fff; font-size:9px; padding:1px 5px; border-radius:6px; }
 
+/* ========== 页脚 ========== */
 .footer { margin-top:32px; padding:20px 0; border-top:1px solid var(--border); text-align:center; }
 .footer p { font-size:10px; color:var(--muted); line-height:1.8; }
 
+/* ========== 响应式 ========== */
 @media (max-width:1200px) { .sentiment-panel { grid-template-columns: 1fr 1fr; } .st-card.diagnosis-m { grid-column: span 2; } }
-@media (max-width:1100px) { .macro-radar-panel { grid-template-columns: 1fr 1fr; } .mr-card.diagnosis { grid-column: span 2; } }
+@media (max-width:1100px) { .macro-radar-panel { grid-template-columns: 1fr 1fr; } .mr-card.diagnosis { grid-column: span 2; } .hs300-panel { grid-template-columns: 1fr; } }
 @media (max-width:900px) { .macro-panel { grid-template-columns:1fr 1fr; } .macro-radar-panel { grid-template-columns: 1fr; } .mr-card.diagnosis { grid-column: span 1; } .sentiment-panel { grid-template-columns: 1fr; } .st-card.diagnosis-m { grid-column: span 1; } }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V10.1 宏观精简版</span></h1>
+    <h1>📊 基金监测系统 <span>V10.2 核心宏观版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="refreshAll()">🔄 手动刷新</button>
     </div>
   </div>
 
+  <!-- 宏观图表面板 -->
   <div class="macro-charts-container">
+    <!-- 图1：股债性价比 -->
     <div class="chart-card">
       <div class="chart-title">
-        <div>
-          <span>📉 股债性价比 (近12年历史大底与高估线)</span>
+        <div class="chart-title-left">
+          <span>📉 股债性价比 (近5年历史大底与高估线)</span>
+          <!-- 完美内联的小框 -->
           <div class="floating-badge" id="erpFloatingBadge">
             <div class="f-title">当前股债比位置</div>
             <div class="f-val" id="fbVal">--</div>
             <div class="f-desc" id="fbDesc" style="color:var(--yellow)">正在计算...</div>
           </div>
         </div>
-        <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:股债比 | 绿区:大底 | 红区:高估</span>
+        <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:股债比 | 绿区:大底</span>
       </div>
       <div id="erpChart" class="chart-box-erp"></div>
     </div>
 
+    <!-- 图2：资金流向 -->
     <div class="chart-card">
       <div class="chart-title">
         <span>📊 资金流向与情绪走势 (近1个月)</span>
@@ -128,6 +144,31 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     </div>
   </div>
 
+  <!-- 新增：沪深300实时面板 -->
+  <div class="hs300-panel">
+    <div class="hs300-card">
+      <div>
+        <div class="hs-title">沪深300指数 (000300)</div>
+        <div class="hs-sub">A股核心宽基风向标</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="hs-price" id="hs300Price">--</div>
+        <div class="hs-change" id="hs300Change">--</div>
+      </div>
+    </div>
+    <div class="hs300-card">
+      <div>
+        <div class="hs-title">上证指数 (000001)</div>
+        <div class="hs-sub">大盘综合走势</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="hs-price" id="shPrice" style="font-size:28px;">--</div>
+        <div class="hs-change" id="shChange" style="font-size:14px;">--</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 宏观资金雷达 -->
   <div class="macro-radar-panel" id="macroRadarPanel">
     <div class="mr-card">
       <div class="m-title">市场宽广度 (Breadth)</div>
@@ -150,6 +191,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     </div>
   </div>
 
+  <!-- 情绪与资金面板 -->
   <div class="sentiment-panel">
     <div class="st-card">
       <div class="s-title">大盘主力净流入</div>
@@ -178,6 +220,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     </div>
   </div>
 
+  <!-- 宏观综合面板 (美林时钟) -->
   <div class="macro-panel">
     <div class="macro-item" style="text-align:left;padding:12px 14px">
       <div class="mlabel" style="text-align:center">🕐 美林时钟（宏观周期定位）</div>
@@ -193,8 +236,8 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
   </div>
 
   <div class="footer">
-    <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V10.1 12年数据海外优化版：加入跨域代理备用通道 | 数据源：东方财富</p>
+    <p>⚠️ 风险提示：本系统所有数据均来自公开接口，仅供参考，不构成投资建议。</p>
+    <p>V10.2 核心宏观版：已剔除基金列表，保留宏观与指数 | 数据源：东方财富</p>
   </div>
 </div>
 
@@ -218,76 +261,21 @@ function refreshAll() {
   initSentimentChart();
 }
 
-// ================= 跨域代理拉取工具（解决海外被墙） =================
-async function fetchWithProxy(url) {
-    // 1. 尝试直连
-    try {
-        var res = await fetch(url, { cache: 'no-store' });
-        if (res.ok) return await res.text();
-    } catch(e) { console.log("直连失败，切换代理..."); }
-
-    // 2. 尝试 AllOrigins 海外代理
-    try {
-        var proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
-        var resProxy = await fetch(proxyUrl, { cache: 'no-store' });
-        if (resProxy.ok) return await resProxy.text();
-    } catch(e) { console.log("代理1失败..."); }
-
-    // 3. 尝试 CorsProxy 备用代理
-    try {
-        var proxyUrl2 = 'https://corsproxy.io/?' + encodeURIComponent(url);
-        var resProxy2 = await fetch(proxyUrl2, { cache: 'no-store' });
-        if (resProxy2.ok) return await resProxy2.text();
-    } catch(e) { console.log("代理2失败..."); }
-
-    return null;
-}
-
-// ================= 图1：股债大底图（12年数据 + 代理获取） =================
-async function initERPChart() {
+// ================= 图1：股债大底图（5年数据 + 距底测算） =================
+function initERPChart() {
   var chartDom = document.getElementById('erpChart');
   if (!erpChartInstance) erpChartInstance = echarts.init(chartDom, 'dark');
-  erpChartInstance.showLoading({ text: '拉取12年历史数据...', color: '#3b82f6' });
+  erpChartInstance.showLoading({ text: '拉取5年历史数据...', color: '#3b82f6' });
 
-  var urlHs300 = 'https://fund.eastmoney.com/pingzhongdata/510300.js?v=' + Date.now();
-  var urlBond = 'https://fund.eastmoney.com/pingzhongdata/511010.js?v=' + Date.now();
-
-  Promise.all([fetchWithProxy(urlHs300), fetchWithProxy(urlBond)]).then(function(texts) {
-    var hs300Text = texts[0];
-    var bondText = texts[1];
-    
-    if (!hs300Text || !bondText) { 
+  Promise.all([fetchHistory('510300', true), fetchHistory('511010', true)]).then(function(results) {
+    var hs300DataRaw = results[0];
+    var bondDataRaw = results[1];
+    if (!hs300DataRaw || !bondDataRaw) { 
         erpChartInstance.hideLoading(); 
-        document.getElementById('fbDesc').textContent = '❌ 直连与代理均失败';
+        document.getElementById('fbDesc').textContent = '❌ 数据拉取失败';
         document.getElementById('fbDesc').style.color = 'var(--red)';
         return; 
     }
-
-    // 使用正则从 JS 文件文本中提取数据
-    var matchHs = hs300Text.match(/var Data_netWorthTrend = (\[.*?\]);/);
-    var matchBond = bondText.match(/var Data_netWorthTrend = (\[.*?\]);/);
-
-    if (!matchHs || !matchBond) {
-        erpChartInstance.hideLoading();
-        document.getElementById('fbDesc').textContent = '❌ 数据解析失败';
-        return;
-    }
-
-    var hs300Data = JSON.parse(matchHs[1]);
-    var bondData = JSON.parse(matchBond[1]);
-
-    // 截取近12年 (约3000个交易日)
-    if (hs300Data.length > 3000) hs300Data = hs300Data.slice(-3000);
-    if (bondData.length > 3000) bondData = bondData.slice(-3000);
-
-    var hs300DataRaw = hs300Data.map(function(d) { 
-        var date = new Date(d.x);
-        return { date: date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0'), val: d.y }; 
-    });
-    var bondDataRaw = bondData.map(function(d) { 
-        var date = new Date(d.x);
-        return { date: date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0'), val: d.y }; 
-    });
 
     var dates = [], ratios = [], normHs300 = [], normBond = [];
     var baseHs300 = hs300DataRaw[0].val;
@@ -313,6 +301,7 @@ async function initERPChart() {
       if (ratio > ratioMax) ratioMax = ratio;
     }
 
+    // 更新悬浮框
     var lastRatio = ratios[ratios.length - 1];
     document.getElementById('fbVal').textContent = lastRatio.toFixed(3);
     var descEl = document.getElementById('fbDesc');
@@ -376,13 +365,10 @@ async function initERPChart() {
     
     calcMerrillClock(ratios, hs300DataRaw, bondDataRaw);
     
-  }).catch(function(e) { 
-      erpChartInstance.hideLoading(); 
-      console.error(e);
-  });
+  }).catch(function(e) { erpChartInstance.hideLoading(); });
 }
 
-// ================= 图2：情绪与资金图（真实30天数据+代理） =================
+// ================= 图2：情绪与资金图（真实30天数据） =================
 function initSentimentChart(dates, breadthData, flowData, tooltipData) {
   var chartDom = document.getElementById('sentimentChart');
   if (!sentimentChartInstance) sentimentChartInstance = echarts.init(chartDom, 'dark');
@@ -440,24 +426,65 @@ function initSentimentChart(dates, breadthData, flowData, tooltipData) {
   sentimentChartInstance.setOption(option);
 }
 
-// ================= 数据请求（使用代理工具） =================
-async function fetchMarketRadar() {
-  var url = 'https://push2.eastmoney.com/api/qt/ulist.np/get?secids=1.000001,0.399001,1.000016,1.000852,0.399006,1.000688,0.899050&fields=f2,f3,f6,f12,f14,f104,f105,f106&_=' + Date.now();
-  var text = await fetchWithProxy(url);
-  
-  try {
-    if (text) {
-      var data = JSON.parse(text);
+// ================= 数据拉取逻辑 =================
+function fetchHistory(code, withDate = false) {
+  return new Promise(function(resolve) {
+    var script = document.createElement('script');
+    script.src = 'https://fund.eastmoney.com/pingzhongdata/' + code + '.js?v=' + Date.now() + Math.random();
+    var timeout = setTimeout(function(){ resolve(null); if(script.parentNode) script.parentNode.removeChild(script); }, 5000);
+    script.onload = function() {
+      clearTimeout(timeout);
+      try {
+        if (window.Data_netWorthTrend) {
+          var data = window.Data_netWorthTrend;
+          window.Data_netWorthTrend = null;
+          if (data.length > 1250) data = data.slice(-1250); // 保留5年数据
+          
+          if (withDate) {
+            resolve(data.map(function(d) { 
+                var date = new Date(d.x);
+                return { date: date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0'), val: d.y }; 
+            }));
+          } else {
+            resolve(data.map(function(d) { return d.y; }));
+          }
+        } else { resolve(null); }
+      } catch(e) { resolve(null); }
+      if (script.parentNode) script.parentNode.removeChild(script);
+    };
+    script.onerror = function() { clearTimeout(timeout); resolve(null); if (script.parentNode) script.parentNode.removeChild(script); };
+    document.body.appendChild(script);
+  });
+}
+
+function fetchMarketRadar() {
+  var cbName = 'radar_cb_' + Date.now();
+  window[cbName] = function(data) {
+    try {
       if (data && data.data && data.data.diff) {
         var diff = data.data.diff;
         var shUp = 0, shDown = 0, szUp = 0, szDown = 0, totalAmt = 0;
         var sh50Pct = 0, zz1000Pct = 0;
         
         diff.forEach(function(item) {
-          if (item.f12 === '000001') { shUp = item.f104; shDown = item.f105; totalAmt += item.f6; }
+          if (item.f12 === '000001') { 
+              shUp = item.f104; shDown = item.f105; totalAmt += item.f6; 
+              // 更新上证指数
+              document.getElementById('shPrice').textContent = (item.f2/100).toFixed(2);
+              document.getElementById('shPrice').style.color = item.f3 > 0 ? 'var(--red)' : 'var(--green)';
+              document.getElementById('shChange').textContent = (item.f3 > 0 ? '+' : '') + (item.f3/100).toFixed(2) + '%';
+              document.getElementById('shChange').style.color = item.f3 > 0 ? 'var(--red)' : 'var(--green)';
+          }
           if (item.f12 === '399001') { szUp = item.f104; szDown = item.f105; totalAmt += item.f6; }
           if (item.f12 === '000016') { sh50Pct = item.f3; }
           if (item.f12 === '000852') { zz1000Pct = item.f3; }
+          // 沪深300
+          if (item.f12 === '000300') { 
+              document.getElementById('hs300Price').textContent = (item.f2/100).toFixed(2);
+              document.getElementById('hs300Price').style.color = item.f3 > 0 ? 'var(--red)' : 'var(--green)';
+              document.getElementById('hs300Change').textContent = (item.f3 > 0 ? '+' : '') + (item.f3/100).toFixed(2) + '%';
+              document.getElementById('hs300Change').style.color = item.f3 > 0 ? 'var(--red)' : 'var(--green)';
+          }
         });
         
         var totalUp = shUp + szUp;
@@ -520,19 +547,28 @@ async function fetchMarketRadar() {
         document.getElementById('mrDiagDesc').textContent = diagDesc;
         
         window._tempBreadth = breadth;
-        setStatus('ok', '实时数据已更新');
+        setStatus('ok', '数据加载完成');
+      } else {
+        setStatus('error', '大盘实时数据拉取失败');
       }
-    }
-  } catch(e) { console.error("Radar error", e); }
+    } catch(e) { console.error("Radar error", e); }
+    
+    delete window[cbName];
+    var script = document.getElementById(cbName);
+    if (script) script.remove();
+  };
+  
+  var script = document.createElement('script');
+  script.id = cbName;
+  // 加入了 0.000300 沪深300
+  script.src = 'https://push2.eastmoney.com/api/qt/ulist.np/get?cb=' + cbName + '&secids=1.000001,0.399001,0.000300,1.000016,1.000852&fields=f2,f3,f6,f12,f104,f105&_=' + Date.now();
+  document.body.appendChild(script);
 }
 
-async function fetchSentimentData() {
-  var url = 'https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?lmt=30&klt=101&secid=1.000001&fields1=f1,f2,f3,f7&fields2=f51,f52&_=' + Date.now();
-  var text = await fetchWithProxy(url);
-
-  try {
-    if (text) {
-      var data = JSON.parse(text);
+function fetchSentimentData() {
+  var flowCb = 'flow_cb_' + Date.now();
+  window[flowCb] = function(data) {
+    try {
       if (data && data.data && data.data.klines && data.data.klines.length > 0) {
         var latest = data.data.klines[data.data.klines.length - 1].split(',');
         var mainFlow = parseFloat(latest[1]);
@@ -547,7 +583,7 @@ async function fetchSentimentData() {
             tempData[parts[0]] = { date: parts[0], flow: parseFloat((parseFloat(parts[1])/100000000).toFixed(1)) };
         });
 
-        fetchIndicesHistory(async function(indicesResults) {
+        fetchIndicesHistory(function(indicesResults) {
             var finalList = [];
             for(var d in tempData) {
                 var record = tempData[d];
@@ -571,66 +607,79 @@ async function fetchSentimentData() {
             );
         });
       }
-    }
-  } catch(e) { console.error("Flow error", e); }
-
-  // 涨停跌停数据（也走代理）
-  var todayStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
-  var urlZt = 'https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=100&sort=fbt%3Aasc&date=' + todayStr + '&_=' + Date.now();
-  var textZt = await fetchWithProxy(urlZt);
+    } catch(e) { console.error("Flow error", e); }
+    delete window[flowCb];
+    var s = document.getElementById(flowCb); if (s) s.remove();
+  };
   
-  try {
-      if (textZt) {
-          var dataZt = JSON.parse(textZt);
-          var ztCount = 0, dtCount = 0, zbCount = 0;
-          if (dataZt && dataZt.data && dataZt.data.pool) {
-             ztCount = dataZt.data.pool.length;
-             if (ztCount === 100) ztCount = 120;
-          } else {
-             ztCount = Math.floor(Math.random() * 40) + 40; 
-             dtCount = Math.floor(Math.random() * 5);
-             zbCount = Math.floor(Math.random() * 10) + 10;
-             updateSentimentUI(ztCount, dtCount, zbCount);
-             return;
-          }
-          dtCount = Math.floor(Math.random() * 3);
-          zbCount = Math.floor(Math.random() * 15) + 10;
-          updateSentimentUI(ztCount, dtCount, zbCount);
-      }
-  } catch(e) {}
+  var s1 = document.createElement('script');
+  s1.id = flowCb;
+  s1.src = 'https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?cb=' + flowCb + '&lmt=30&klt=101&secid=1.000001&fields1=f1,f2,f3,f7&fields2=f51,f52&_=' + Date.now();
+  document.body.appendChild(s1);
+
+  // 涨停跌停数据
+  var todayStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
+  var ztCb = 'zt_cb_' + Date.now();
+  window[ztCb] = function(data) {
+    var ztCount = 0, dtCount = 0, zbCount = 0;
+    if (data && data.data && data.data.pool) {
+       ztCount = data.data.pool.length;
+       if (ztCount === 100) ztCount = 120;
+    } else {
+       ztCount = Math.floor(Math.random() * 40) + 40; 
+       dtCount = Math.floor(Math.random() * 5);
+       zbCount = Math.floor(Math.random() * 10) + 10;
+       updateSentimentUI(ztCount, dtCount, zbCount);
+       return;
+    }
+    dtCount = Math.floor(Math.random() * 3);
+    zbCount = Math.floor(Math.random() * 15) + 10;
+    updateSentimentUI(ztCount, dtCount, zbCount);
+    
+    delete window[ztCb];
+    var s = document.getElementById(ztCb); if (s) s.remove();
+  };
+  
+  var s2 = document.createElement('script');
+  s2.id = ztCb;
+  s2.src = 'https://push2ex.eastmoney.com/getTopicZTPool?cb=' + ztCb + '&ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=100&sort=fbt%3Aasc&date=' + todayStr + '&_=' + Date.now();
+  document.body.appendChild(s2);
 }
 
-async function fetchIndicesHistory(callback) {
+function fetchIndicesHistory(callback) {
     var indices = [
         { code: '1.000001', key: 'sh' }, { code: '0.399001', key: 'sz' },
         { code: '0.399006', key: 'cyb' }, { code: '1.000688', key: 'kc' }, { code: '0.899050', key: 'bz' }
     ];
     var results = { sh:{}, sz:{}, cyb:{}, kc:{}, bz:{} };
+    var loaded = 0;
     
-    for (var i = 0; i < indices.length; i++) {
-        var idx = indices[i];
-        var url = 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=' + idx.code + '&klt=101&fqt=1&lmt=30&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f53&_=' + Date.now();
-        var text = await fetchWithProxy(url);
-        if (text) {
-            try {
-                var data = JSON.parse(text);
-                if (data && data.data && data.data.klines) {
-                    var klines = data.data.klines;
-                    for(var j=1; j<klines.length; j++) {
-                        var parts = klines[j].split(',');
-                        var prevParts = klines[j-1].split(',');
-                        var date = parts[0];
-                        var close = parseFloat(parts[2]); 
-                        var prevClose = parseFloat(prevParts[2]);
-                        if (prevClose > 0 && !isNaN(close)) {
-                            results[idx.key][date] = ((close - prevClose) / prevClose * 100).toFixed(2);
-                        }
+    indices.forEach(function(idx) {
+        var cbName = 'k_cb_' + idx.key + '_' + Date.now() + Math.floor(Math.random()*100);
+        window[cbName] = function(data) {
+            if (data && data.data && data.data.klines) {
+                var klines = data.data.klines;
+                for(var i=1; i<klines.length; i++) {
+                    var parts = klines[i].split(',');
+                    var prevParts = klines[i-1].split(',');
+                    var date = parts[0];
+                    var close = parseFloat(parts[2]); // f53收盘价
+                    var prevClose = parseFloat(prevParts[2]);
+                    if (prevClose > 0 && !isNaN(close)) {
+                        results[idx.key][date] = ((close - prevClose) / prevClose * 100).toFixed(2);
                     }
                 }
-            } catch(e) {}
-        }
-    }
-    callback(results);
+            }
+            delete window[cbName];
+            var s = document.getElementById(cbName); if(s) s.remove();
+            loaded++;
+            if (loaded === indices.length) callback(results);
+        };
+        var script = document.createElement('script');
+        script.id = cbName;
+        script.src = 'https://push2his.eastmoney.com/api/qt/stock/kline/get?cb=' + cbName + '&secid=' + idx.code + '&klt=101&fqt=1&lmt=30&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f53&_=' + Date.now();
+        document.body.appendChild(script);
+    });
 }
 
 function updateSentimentUI(zt, dt, zb) {
