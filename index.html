@@ -40,12 +40,13 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .floating-badge {
     position: absolute; top: 60px; left: 20px;
     background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.15);
-    padding: 12px 16px; border-radius: 8px; backdrop-filter: blur(6px);
+    padding: 10px 16px; border-radius: 8px; backdrop-filter: blur(6px);
     pointer-events: none; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    display: flex; align-items: center; gap: 12px;
 }
-.floating-badge .f-title { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.floating-badge .f-val { font-size: 24px; font-weight: 800; color: var(--yellow); margin-bottom: 4px; }
-.floating-badge .f-desc { font-size: 13px; font-weight: 600; }
+.floating-badge .f-title { font-size: 13px; color: var(--text); margin-bottom: 0; }
+.floating-badge .f-val { font-size: 20px; font-weight: 800; color: var(--yellow); margin-bottom: 0; }
+.floating-badge .f-desc { font-size: 13px; font-weight: 600; color: var(--yellow); margin-bottom: 0; display:flex; align-items:center;}
 
 /* 宏观资金雷达面板 */
 .macro-radar-panel { display:grid; grid-template-columns: 1fr 1fr 2fr; gap:12px; margin-bottom:16px; }
@@ -236,10 +237,10 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     <!-- 图1：股债性价比 (独占一行) -->
     <div class="chart-card">
       <div class="chart-title">
-        <span>📉 股债性价比 (15年历史大底与高估线)</span>
+        <span>📉 股债性价比 (近5年历史大底与高估线)</span>
         <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:股债比 | 绿区:大底 | 红区:高估</span>
       </div>
-      <!-- 悬浮提示框 -->
+      <!-- 悬浮提示框 (图4样式) -->
       <div class="floating-badge" id="erpFloatingBadge">
         <div class="f-title">当前股债比位置</div>
         <div class="f-val" id="fbVal">--</div>
@@ -381,86 +382,14 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
 <script src="https://cdn.jsdelivr.net/npm/fund-api/dist/browser/fund-api.iife.min.js"></script>
 <script>
+// 只保留指定的3只基金 + 沪深300，加上隐藏的518600和161029用于宏观时钟计算
 var ALL_FUNDS = [
-  {code:'001549',name:'天弘上证50ETF',sector:'宽基'},{code:'530000',name:'天弘上证50场内',sector:'宽基'},
-  {code:'006021',name:'广发沪深300',sector:'宽基'},{code:'510300',name:'沪深300ETF',sector:'宽基'},
-  {code:'011609',name:'易方达科创50',sector:'宽基'},{code:'588080',name:'科创50场内',sector:'宽基'},
-  {code:'019817',name:'广发创业板ETF',sector:'宽基'},{code:'159952',name:'创业板场内',sector:'宽基'},
-  {code:'588000',name:'科创50ETF华夏',sector:'宽基'},{code:'013305',name:'科创创业50',sector:'宽基'},
-  {code:'023918',name:'自由现金流',sector:'宽基'},{code:'159201',name:'自由现金流场内',sector:'宽基'},
-  {code:'017512',name:'北证50',sector:'宽基'},
-  {code:'020465',name:'招商半导体',sector:'科技'},{code:'561980',name:'半导体设备ETF',sector:'科技'},
-  {code:'020482',name:'机器人',sector:'科技'},{code:'560770',name:'机器人ETF',sector:'科技'},
-  {code:'020900',name:'通信设备',sector:'科技'},{code:'515880',name:'通信ETF',sector:'科技'},
-  {code:'024195',name:'卫星',sector:'科技'},{code:'159206',name:'卫星ETF',sector:'科技'},
-  {code:'012734',name:'人工智能',sector:'科技'},{code:'006503',name:'集成电路',sector:'科技'},
-  {code:'001072',name:'智能装备',sector:'科技'},{code:'022364',name:'永赢科技',sector:'科技'},
-  {code:'019830',name:'数字产业',sector:'科技'},{code:'016664',name:'高端制造',sector:'科技'},
-  {code:'008989',name:'科技创新',sector:'科技'},{code:'009049',name:'易方达高端',sector:'科技'},
-  {code:'159852',name:'软件服务ETF',sector:'科技'},{code:'012621',name:'软件服务场内',sector:'科技'},
-  {code:'002170',name:'东吴移动',sector:'科技'},{code:'515250',name:'智能汽车场内',sector:'科技'},
-  {code:'013292',name:'富国智能汽车',sector:'科技'},{code:'008586',name:'华夏人工智能',sector:'科技'},
-  {code:'019062',name:'易方达软件',sector:'科技'},{code:'562930',name:'软件易方达场内',sector:'科技'},
-  {code:'020686',name:'科创新材料',sector:'科技'},{code:'588160',name:'科创新材料场内',sector:'科技'},
-  {code:'019170',name:'云计算',sector:'科技'},{code:'023885',name:'金融科技',sector:'科技'},
-  {code:'516100',name:'金融科技场内',sector:'科技'},{code:'001630',name:'计算机',sector:'科技'},
-  {code:'159998',name:'计算机场内',sector:'科技'},
-  {code:'017877',name:'新能源',sector:'新能源'},{code:'018926',name:'电池',sector:'新能源'},
-  {code:'019875',name:'稀有金属',sector:'新能源'},{code:'001410',name:'信澳新能源',sector:'新能源'},
-  {code:'161028',name:'新能源汽车',sector:'新能源'},{code:'501226',name:'全球新能源',sector:'新能源'},
-  {code:'019058',name:'绿色电力',sector:'新能源'},{code:'260112',name:'基建能源',sector:'新能源'},
-  {code:'013817',name:'光伏',sector:'新能源'},{code:'516290',name:'光伏场内',sector:'新能源'},
-  {code:'159755',name:'电池ETF',sector:'新能源'},{code:'159608',name:'稀有金属ETF',sector:'新能源'},
-  {code:'159611',name:'电力ETF',sector:'新能源'},{code:'016185',name:'电力公用',sector:'新能源'},
-  {code:'013476',name:'智能电动车',sector:'新能源'},{code:'016900',name:'碳中和',sector:'新能源'},
-  {code:'562990',name:'碳中和场内',sector:'新能源'},{code:'025857',name:'电网设备',sector:'新能源'},
-  {code:'159326',name:'电网设备场内',sector:'新能源'},
-  {code:'006113',name:'创新药',sector:'医药'},{code:'501009',name:'生物科技',sector:'医药'},
-  {code:'159892',name:'恒生医药ETF',sector:'医药'},{code:'012738',name:'创新药广发',sector:'医药'},
-  {code:'515120',name:'创新药场内',sector:'医药'},{code:'007883',name:'医药易方达',sector:'医药'},
-  {code:'512010',name:'医药ETF场内',sector:'医药'},
-  {code:'015945',name:'国防军工',sector:'军工'},{code:'512560',name:'军工ETF',sector:'军工'},
-  {code:'025732',name:'航天航空',sector:'军工'},{code:'028091',name:'航天航空行业',sector:'军工'},
-  {code:'161725',name:'白酒',sector:'消费'},{code:'000083',name:'消费行业',sector:'消费'},
-  {code:'012857',name:'主要消费',sector:'消费'},{code:'159928',name:'消费场内',sector:'消费'},
-  {code:'560880',name:'家电场内',sector:'消费'},{code:'015040',name:'食品饮料',sector:'消费'},
-  {code:'159736',name:'食品饮料场内',sector:'消费'},{code:'512690',name:'酒ETF',sector:'消费'},
-  {code:'005064',name:'家用电器',sector:'消费'},{code:'159732',name:'消费电子ETF',sector:'消费'},
-  {code:'001469',name:'金融地产',sector:'金融'},{code:'159940',name:'金融地产场内',sector:'金融'},
-  {code:'012874',name:'证券指数',sector:'金融'},{code:'005663',name:'金融精选',sector:'金融'},
-  {code:'161029',name:'银行指数',sector:'金融'},{code:'006697',name:'华宝银行',sector:'金融'},
-  {code:'512800',name:'银行场内',sector:'金融'},{code:'512880',name:'证券ETF',sector:'金融'},
-  {code:'018099',name:'保险',sector:'金融'},{code:'010365',name:'香港银行',sector:'金融'},
-  {code:'015896',name:'化工指数',sector:'周期'},{code:'159870',name:'化工ETF',sector:'周期'},
-  {code:'005224',name:'基建工程',sector:'周期'},{code:'516970',name:'基建场内',sector:'周期'},
-  {code:'014415',name:'畜牧养殖',sector:'周期'},{code:'516670',name:'畜牧场内',sector:'周期'},
-  {code:'010770',name:'天弘农业',sector:'周期'},{code:'512620',name:'农业场内',sector:'周期'},
-  {code:'008190',name:'钢铁',sector:'周期'},{code:'515210',name:'钢铁场内',sector:'周期'},
-  {code:'008280',name:'煤炭',sector:'周期'},{code:'515220',name:'煤炭场内',sector:'周期'},
-  {code:'008987',name:'上海金',sector:'周期'},{code:'518600',name:'金场内',sector:'周期'},
-  {code:'165520',name:'800有色',sector:'周期'},{code:'018853',name:'标普石油',sector:'周期'},
-  {code:'100039',name:'通胀通缩',sector:'周期'},{code:'007786',name:'一带一路',sector:'周期'},
-  {code:'515150',name:'一带一路场内',sector:'周期'},{code:'011036',name:'稀土产业',sector:'周期'},
-  {code:'159698',name:'粮食场内',sector:'周期'},{code:'021087',name:'粮食产业',sector:'周期'},
-  {code:'020904',name:'工程机械',sector:'周期'},{code:'560280',name:'工程机械场内',sector:'周期'},
-  {code:'161715',name:'大宗商品',sector:'周期'},
-  {code:'270023',name:'全球精选',sector:'海外'},{code:'017731',name:'全球产业升级',sector:'海外'},
-  {code:'005698',name:'全球科技先锋',sector:'海外'},{code:'018230',name:'全球优质企业',sector:'海外'},
-  {code:'100055',name:'全球科技互联网',sector:'海外'},{code:'016702',name:'海外量化',sector:'海外'},
-  {code:'000043',name:'美国成长',sector:'海外'},{code:'040046',name:'纳斯达克',sector:'海外'},
-  {code:'006479',name:'广发纳斯达克',sector:'海外'},{code:'018147',name:'新兴市场',sector:'海外'},
-  {code:'008254',name:'华宝致远',sector:'海外'},{code:'006328',name:'中概互联网',sector:'海外'},
-  {code:'513050',name:'中概互联网ETF',sector:'海外'},{code:'000979',name:'港股深',sector:'海外'},
-  {code:'005555',name:'恒生国企ETF',sector:'海外'},{code:'159954',name:'恒生国企场内',sector:'海外'},
-  {code:'013402',name:'恒生科技',sector:'海外'},{code:'014674',name:'港股通互联网',sector:'海外'},
-  {code:'159792',name:'港股通互联网场内',sector:'海外'},{code:'020969',name:'全球商品QDII',sector:'海外'},
-  {code:'012769',name:'动漫游戏',sector:'文娱'},{code:'159869',name:'动漫游戏场内',sector:'文娱'},
-  {code:'004753',name:'传媒',sector:'文娱'},{code:'512980',name:'传媒场内',sector:'文娱'},
-  {code:'000390',name:'华商优势',sector:'主动混合'},{code:'166301',name:'华商新趋势',sector:'主动混合'},
-  {code:'720001',name:'财通价值动量',sector:'主动混合'},{code:'001170',name:'宏利复兴',sector:'主动混合'},
-  {code:'001412',name:'德邦鑫星',sector:'主动混合'},{code:'001438',name:'瑞享灵活',sector:'主动混合'},
-  {code:'001048',name:'新兴产业',sector:'主动混合'},{code:'025942',name:'广发新动力',sector:'主动混合'},
-  {code:'002163',name:'东方惠新',sector:'主动混合'},{code:'001194',name:'稳健回报',sector:'主动混合'}
+  {code:'020465',name:'招商半导体',sector:'科技'},
+  {code:'022364',name:'永赢科技',sector:'科技'},
+  {code:'006503',name:'集成电路',sector:'科技'},
+  {code:'510300',name:'沪深300ETF',sector:'宽基'},
+  {code:'518600',name:'金场内',sector:'周期', hide:true},
+  {code:'161029',name:'银行指数',sector:'金融', hide:true}
 ];
 
 var CLOCK_PROXY = { stock:'510300', commodity:'518600', bond:'161029' };
@@ -541,21 +470,32 @@ function initERPChart() {
       if (ratio > ratioMax) ratioMax = ratio;
     }
 
-    // 更新悬浮框
+    // 更新悬浮框 (图4样式)
     var lastRatio = ratios[ratios.length - 1];
+    var lastDate = dates[dates.length - 1];
+    var dateFormatted = lastDate.substring(5);
+    
     document.getElementById('fbVal').textContent = lastRatio.toFixed(3);
+    
     var descEl = document.getElementById('fbDesc');
-    var greenLineVal = ratioMin * 1.25; // 拉高大底区，更宽容一些
-    var redLineVal = ratioMax * 0.90; // 红色高估线
+    var greenLineVal = ratioMin * 1.25; // 大底区
+    var redLineVal = ratioMax * 0.90; // 高估区
+
+    var lastHs300 = hs300DataRaw[hs300DataRaw.length - 1].val;
+    var lastNormBond = normBond[normBond.length - 1];
+    var targetNormHs300 = greenLineVal * lastNormBond;
+    var targetHs300 = targetNormHs300 * baseHs300;
+    var dropPct = (targetHs300 - lastHs300) / lastHs300 * 100;
 
     if (lastRatio <= greenLineVal) {
-        descEl.textContent = '🟢 极度低估 (大底区)';
+        descEl.innerHTML = `🟢 极度低估 (大底区) <span style="color:var(--muted); font-size:12px; margin-left:8px;">(最新: ${dateFormatted})</span>`;
         descEl.style.color = 'var(--green)';
     } else if (lastRatio >= redLineVal) {
-        descEl.textContent = '🔴 极度高估 (注意风险)';
+        descEl.innerHTML = `🔴 极度高估 (注意风险) <span style="color:var(--muted); font-size:12px; margin-left:8px;">(最新: ${dateFormatted})</span>`;
         descEl.style.color = 'var(--red)';
     } else {
-        descEl.textContent = '🟡 正常区间 (等待机会)';
+        var dropText = dropPct < 0 ? ` (沪深300再跌${Math.abs(dropPct).toFixed(2)}%到底)` : ` (沪深300已到历史大底)`;
+        descEl.innerHTML = `🟡 正常区间${dropText} <span style="color:var(--muted); font-size:12px; margin-left:8px;">(最新: ${dateFormatted})</span>`;
         descEl.style.color = 'var(--yellow)';
     }
 
@@ -1365,9 +1305,10 @@ function renderTrackStats() {
 function renderTabs() {
   var cats = ['全部'];
   var seen = {};
-  ALL_FUNDS.forEach(function(f) { if (!seen[f.sector]) { seen[f.sector] = true; cats.push(f.sector); } });
+  ALL_FUNDS.forEach(function(f) { if (!seen[f.sector] && !f.hide) { seen[f.sector] = true; cats.push(f.sector); } });
+  var visibleFunds = ALL_FUNDS.filter(function(f) { return !f.hide; });
   document.getElementById('catTabs').innerHTML = cats.map(function(cat) {
-    var count = cat === '全部' ? ALL_FUNDS.length : ALL_FUNDS.filter(function(f) { return f.sector === cat; }).length;
+    var count = cat === '全部' ? visibleFunds.length : visibleFunds.filter(function(f) { return f.sector === cat; }).length;
     return '<button class="cat-tab ' + (cat === activeCategory ? 'active' : '') + '" onclick="switchCat(\'' + cat + '\')">' + cat + '<span class="count">' + count + '</span></button>';
   }).join('');
 }
@@ -1375,7 +1316,7 @@ function switchCat(cat) { activeCategory = cat; renderTabs(); render(); }
 
 function getSortedList() {
   var sort = document.getElementById('sortSelect').value;
-  var list = ALL_FUNDS.map(function(f) {
+  var list = ALL_FUNDS.filter(function(f) { return !f.hide; }).map(function(f) {
     var d = fundData[f.code] || {};
     var ind = d.indicators || {
       rsi:50, macd:{cross:'中性'}, boll:{pos:50}, atr:1, atrPct:1, maStatus:'纠缠', pct:0, lastClose:1.0, ma5:1.0,
@@ -1700,7 +1641,7 @@ function calcMacroState() {
 
 function updateRadar() {
   var counts = {'买入':0,'偏多':0,'预埋':0,'观望':0,'偏空':0,'卖出':0};
-  ALL_FUNDS.forEach(function(f) {
+  ALL_FUNDS.filter(function(f) { return !f.hide; }).forEach(function(f) {
     var d = fundData[f.code];
     if (d && d.signal) counts[d.signal.signal]++;
     else counts['观望']++;
