@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V9.2 | 精简版</title>
+<title>基金监测系统 V9.3 | 修复版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -219,7 +219,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V9.2 精简版</span></h1>
+    <h1>📊 基金监测系统 <span>V9.3 修复版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -361,7 +361,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V9.2 精简版：5只核心基金 | 数据源：东方财富 pingzhongdata + fundgz</p>
+    <p>V9.3 修复版：5只核心基金 | 数据源：东方财富 push2his + fundgz</p>
   </div>
 </div>
 
@@ -381,7 +381,7 @@ var ALL_FUNDS = [
   { code:'020465', name:'招商半导体',       sector:'科技' }
 ];
 
-var CLOCK_PROXY = { stock:'510300', commodity:'518600', bond:'161029' };
+var CLOCK_PROXY = { stock:'510300', commodity:'518600', bond:'511260' }; // 国债改用511260
 var SECTOR_WEIGHT = {
   '科技':1.30,'新能源':1.25,'军工':1.25,'医药':1.20,
   '宽基':1.00,'海外':1.00,'消费':0.95,'文娱':0.95,'主动混合':0.95,'周期':0.90,'金融':0.85
@@ -395,7 +395,6 @@ var currentSignalFilter = null;
 var erpChartInstance = null;
 var sentimentChartInstance = null;
 
-/* 缓存只保留最近3天，避免每天首开全量重拉 */
 function cleanOldCache() {
   try {
     var keepDays = 3;
@@ -404,7 +403,6 @@ function cleanOldCache() {
     for (var i = 0; i < localStorage.length; i++) {
       var key = localStorage.key(i);
       if (key && key.indexOf('navHist_') === 0) {
-        // key 格式: navHist_YYYY-MM-DD_code
         var parts = key.split('_');
         if (parts.length >= 2) {
           var d = new Date(parts[1] + 'T00:00:00Z').getTime();
@@ -417,45 +415,62 @@ function cleanOldCache() {
 }
 
 /* ============================================================
- * 串行锁：解决 window.Data_netWorthTrend 全局变量并发覆盖
+ * 全新的 K线获取函数（用于 ERP 图表和场内基金）
  * ============================================================ */
-var _historyLock = Promise.resolve();
+function fetchKlineHistory(secid) {
+  return new Promise(function(resolve) {
+    var cbName = 'kline_cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+    window[cbName] = function(data) {
+      try {
+        if (data && data.data && data.data.klines) {
+          var klines = data.data.klines.map(function(line) {
+            var parts = line.split(',');
+            // 东财格式: 日期,开,收,高,低,成交量,... -> 我们只取日期和收盘价
+            return { date: parts[0], val: parseFloat(parts[2]) };
+          });
+          resolve(klines);
+        } else {
+          resolve(null);
+        }
+      } catch(e) { resolve(null); }
+      delete window[cbName];
+      var s = document.getElementById(cbName); if (s) s.remove();
+    };
 
-function fetchHistory(code, withDate) {
-  var p = _historyLock.then(function() {
-    return _fetchHistoryOnce(code, withDate);
+    var script = document.createElement('script');
+    script.id = cbName;
+    // klt=101(日线), fqt=1(前复权)
+    script.src = 'https://push2his.eastmoney.com/api/qt/stock/kline/get?cb=' + cbName + 
+                 '&secid=' + secid + 
+                 '&klt=101&fqt=1&lmt=4000&end=20500101&iscca=1&fields1=f1,f2,f3,f4,f5,f6,f7,f8&fields2=f51,f52,f53,f54,f55,f56';
+    script.onerror = function() { resolve(null); delete window[cbName]; if(script.parentNode) script.remove(); };
+    document.body.appendChild(script);
+
+    // 8秒超时兜底
+    setTimeout(function() {
+      if (window[cbName]) { resolve(null); delete window[cbName]; if(script.parentNode) script.remove(); }
+    }, 8000);
   });
-  _historyLock = p.catch(function(){});
-  return p;
 }
 
-function _fetchHistoryOnce(code, withDate) {
+/* 原场外基金历史净值获取（保留用于 020465 等场外基金） */
+function fetchHistory(code) {
   return new Promise(function(resolve) {
     var script = document.createElement('script');
     var timeout = setTimeout(function() { cleanup(); resolve(null); }, 8000);
-
     function cleanup() {
       clearTimeout(timeout);
       if (script.parentNode) script.parentNode.removeChild(script);
       try { window.Data_netWorthTrend = null; } catch(e) {}
     }
-
     script.src = 'https://fund.eastmoney.com/pingzhongdata/' + code + '.js?v=' + Date.now();
     script.onload = function() {
       clearTimeout(timeout);
       try {
-        if (typeof window.Data_netWorthTrend !== 'undefined'
-            && Array.isArray(window.Data_netWorthTrend)
-            && window.Data_netWorthTrend.length > 10) {
+        if (typeof window.Data_netWorthTrend !== 'undefined' && Array.isArray(window.Data_netWorthTrend) && window.Data_netWorthTrend.length > 10) {
           var data = window.Data_netWorthTrend;
           window.Data_netWorthTrend = null;
-          if (withDate) {
-            resolve(data.map(function(d) {
-              return { date: new Date(d.x).toISOString().slice(0,10), val: d.y };
-            }));
-          } else {
-            resolve(data.map(function(d) { return d.y; }));
-          }
+          resolve(data.map(function(d) { return d.y; }));
         } else {
           resolve(null);
         }
@@ -468,7 +483,7 @@ function _fetchHistoryOnce(code, withDate) {
 }
 
 /* ============================================================
- * 图1：股债性价比（串行拉取，避免全局变量打架）
+ * 图1：股债性价比（使用稳定的 push2his 接口）
  * ============================================================ */
 async function initERPChart() {
   var chartDom = document.getElementById('erpChart');
@@ -476,12 +491,12 @@ async function initERPChart() {
   erpChartInstance.showLoading({ text: '拉取15年历史数据...', color: '#3b82f6' });
 
   try {
-    var hs300DataRaw = await fetchHistory('510300', true);
-    var bondDataRaw  = await fetchHistory('511010', true);
-    if (!hs300DataRaw || !bondDataRaw) {
-      erpChartInstance.hideLoading();
-      erpChartInstance.setOption({ title: { text: '历史数据拉取失败，请稍后手动刷新', left:'center', top:'middle', textStyle:{color:'#64748b',fontSize:13} } }, true);
-      return;
+    // 改用 push2his 稳定接口，510300(沪深300) 和 511260(十年国债)
+    var hs300DataRaw = await fetchKlineHistory('1.510300');
+    var bondDataRaw  = await fetchKlineHistory('1.511260');
+    
+    if (!hs300DataRaw || !bondDataRaw || hs300DataRaw.length < 10 || bondDataRaw.length < 10) {
+      throw new Error("K线数据获取失败或过短");
     }
 
     var dates = [], ratios = [], normHs300 = [], normBond = [];
@@ -571,6 +586,7 @@ async function initERPChart() {
     erpChartInstance.setOption(option, true);
   } catch(e) {
     erpChartInstance.hideLoading();
+    erpChartInstance.setOption({ title: { text: '历史数据拉取失败，请稍后手动刷新', left:'center', top:'middle', textStyle:{color:'#64748b',fontSize:13} } }, true);
   }
 }
 
@@ -686,7 +702,7 @@ function recordSentimentData(breadth, flowYi, indicesData) {
 }
 
 /* ============================================================
- * 市场资金雷达（保持原逻辑）
+ * 市场资金雷达
  * ============================================================ */
 function fetchMarketRadar() {
   var cbName = 'radar_cb_' + Date.now();
@@ -1004,10 +1020,9 @@ function exportSignals() {
 }
 
 /* ============================================================
- * 实时估值：改用 fundgz jsonp，串行队列避免固定回调覆盖
+ * 实时估值：基金 jsonp
  * ============================================================ */
 var _fundGzLock = Promise.resolve();
-
 function fetchFundData(code) {
   var p = _fundGzLock.then(function() { return _fetchFundGzOnce(code); });
   _fundGzLock = p.catch(function(){});
@@ -1031,7 +1046,6 @@ function _fetchFundGzOnce(code) {
       try { window.jsonpgz = function(){}; } catch(e) {}
     }
 
-    // 东财估值接口固定回调名 jsonpgz，串行执行即可安全使用
     window.jsonpgz = function(d) {
       if (done) return;
       done = true;
@@ -1449,7 +1463,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V9.2 已过滤周末幽灵信号，且严格拦截"接飞刀"式预埋。</div>'
+      + '<div style="font-size:13px">V9.3 已过滤周末幽灵信号，且严格拦截"接飞刀"式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
@@ -1568,7 +1582,6 @@ async function refreshAll() {
   fetchMarketRadar();
   fetchSentimentData();
 
-  // 先等 ERP 图拉完（内部串行），再进主循环，避免全局变量打架
   setStatus('loading', '拉取股债历史数据...');
   await initERPChart();
   initSentimentChart();
@@ -1609,7 +1622,18 @@ async function refreshAll() {
     } catch(e) { closes = null; }
 
     if (!closes) {
-      try { closes = await fetchHistory(fund.code); } catch(e) {}
+      if (fund.code === '020465') {
+        // 场外基金使用原接口
+        try { closes = await fetchHistory(fund.code); } catch(e) {}
+      } else {
+        // 场内ETF使用稳定的 push2his
+        var secid = (fund.code.startsWith('5') || fund.code.startsWith('6')) ? '1.' + fund.code : '0.' + fund.code;
+        try {
+          var klineData = await fetchKlineHistory(secid);
+          if (klineData) closes = klineData.map(function(d){ return d.val; });
+        } catch(e) {}
+      }
+      
       if (closes && closes.length > 30) {
         try { localStorage.setItem(cacheKey, JSON.stringify(closes)); } catch(e) {}
       }
@@ -1715,7 +1739,6 @@ function init() {
   });
   renderTabs(); render(); updateRadar(); updateMacro(); updateClockWidget();
 
-  // 直接用 script 的 onload/onerror 监听 echarts，避免死等
   var echartsScript = document.querySelector('script[src*="echarts"]');
   function start() {
     if (window.echarts) {
@@ -1730,7 +1753,6 @@ function init() {
     echartsScript.addEventListener('error', function() {
       setStatus('error', 'ECharts 加载失败，请检查网络');
     });
-    // 兜底：10秒后还没触发就报错
     setTimeout(function() {
       if (!window.echarts) setStatus('error', 'ECharts 加载超时，请刷新');
     }, 10000);
