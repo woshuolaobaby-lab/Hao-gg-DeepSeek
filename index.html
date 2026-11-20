@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V9.3 | 修复版</title>
+<title>基金监测系统 V9.4 | 优化版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -30,20 +30,27 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
 .macro-charts-container { display:grid; grid-template-columns: 1fr; gap:16px; margin-bottom:16px; }
 .chart-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; position:relative; }
-.chart-title { font-size:14px; color:var(--text); font-weight:600; margin-bottom:12px; display:flex; justify-content:space-between;}
-.chart-title span { font-size:12px; color:var(--muted); font-weight:400;}
+
+/* 优化：图表标题栏改为 Flex 布局，支持横向并排展示 */
+.chart-title { 
+  font-size:14px; color:var(--text); font-weight:600; margin-bottom:12px; 
+  display:flex; align-items:center; flex-wrap:wrap; gap:16px; 
+}
+.chart-title .title-main { white-space:nowrap; }
+.chart-title .title-sub { font-size:12px; color:var(--muted); font-weight:400; white-space:nowrap; }
+
+/* 优化：悬浮框去掉 absolute，改为 inline-flex 融入标题栏 */
+.floating-badge {
+    display: inline-flex; align-items: center; gap: 12px;
+    background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(59,130,246,0.3);
+    padding: 6px 14px; border-radius: 8px; backdrop-filter: blur(6px);
+}
+.floating-badge .f-title { font-size: 12px; color: var(--muted); margin-bottom: 0; }
+.floating-badge .f-val { font-size: 18px; font-weight: 800; color: var(--yellow); margin-bottom: 0; line-height: 1; }
+.floating-badge .f-desc { font-size: 12px; font-weight: 600; margin-bottom: 0; line-height: 1; }
+
 .chart-box-erp { width:100%; height:400px; }
 .chart-box-sentiment { width:100%; height:280px; }
-
-.floating-badge {
-    position: absolute; top: 60px; left: 20px;
-    background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.15);
-    padding: 12px 16px; border-radius: 8px; backdrop-filter: blur(6px);
-    pointer-events: none; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-}
-.floating-badge .f-title { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.floating-badge .f-val { font-size: 24px; font-weight: 800; color: var(--yellow); margin-bottom: 4px; }
-.floating-badge .f-desc { font-size: 13px; font-weight: 600; }
 
 .macro-radar-panel { display:grid; grid-template-columns: 1fr 1fr 2fr; gap:12px; margin-bottom:16px; }
 .mr-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:center; position:relative; overflow:hidden; }
@@ -219,7 +226,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V9.3 修复版</span></h1>
+    <h1>📊 基金监测系统 <span>V9.4 优化版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -229,14 +236,15 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="macro-charts-container">
     <div class="chart-card">
+      <!-- 优化：标题和悬浮框同行显示 -->
       <div class="chart-title">
-        <span>📉 股债性价比 (15年历史大底与高估线)</span>
-        <span style="color:var(--red)">红线:沪深300 | 蓝线:国债 | 金线:股债比 | 绿区:大底 | 红区:高估</span>
-      </div>
-      <div class="floating-badge" id="erpFloatingBadge">
-        <div class="f-title">当前股债比位置</div>
-        <div class="f-val" id="fbVal">--</div>
-        <div class="f-desc" id="fbDesc" style="color:var(--yellow)">正在计算...</div>
+        <span class="title-main">📉 股债性价比 (15年历史大底与高估线)</span>
+        <div class="floating-badge" id="erpFloatingBadge">
+          <div class="f-title">当前股债比位置:</div>
+          <div class="f-val" id="fbVal">--</div>
+          <div class="f-desc" id="fbDesc" style="color:var(--yellow)">正在计算...</div>
+        </div>
+        <span class="title-sub" style="color:var(--red); margin-left:auto;">红线:沪深300 | 蓝线:国债 | 金线:股债比 | 绿区:大底 | 红区:高估</span>
       </div>
       <div id="erpChart" class="chart-box-erp"></div>
     </div>
@@ -244,7 +252,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     <div class="chart-card">
       <div class="chart-title">
         <span>📊 资金流向与情绪走势 (近1个月)</span>
-        <span style="color:var(--green)">鼠标悬浮柱状图看各大指数涨跌幅</span>
+        <span class="title-sub" style="color:var(--green); margin-left:auto;">鼠标悬浮柱状图看各大指数涨跌幅</span>
       </div>
       <div id="sentimentChart" class="chart-box-sentiment"></div>
     </div>
@@ -361,7 +369,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V9.3 修复版：5只核心基金 | 数据源：东方财富 push2his + fundgz</p>
+    <p>V9.4 优化版：15年历史数据拉满 | 图例去重叠 | 5只核心基金</p>
   </div>
 </div>
 
@@ -370,9 +378,6 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 </div>
 
 <script>
-/* ============================================================
- * 精简后的基金列表：4只宽基 + 1只半导体
- * ============================================================ */
 var ALL_FUNDS = [
   { code:'510300', name:'沪深300ETF',      sector:'宽基' },
   { code:'588080', name:'科创50场内',       sector:'宽基' },
@@ -381,7 +386,7 @@ var ALL_FUNDS = [
   { code:'020465', name:'招商半导体',       sector:'科技' }
 ];
 
-var CLOCK_PROXY = { stock:'510300', commodity:'518600', bond:'511260' }; // 国债改用511260
+var CLOCK_PROXY = { stock:'510300', commodity:'518600', bond:'511260' };
 var SECTOR_WEIGHT = {
   '科技':1.30,'新能源':1.25,'军工':1.25,'医药':1.20,
   '宽基':1.00,'海外':1.00,'消费':0.95,'文娱':0.95,'主动混合':0.95,'周期':0.90,'金融':0.85
@@ -425,7 +430,6 @@ function fetchKlineHistory(secid) {
         if (data && data.data && data.data.klines) {
           var klines = data.data.klines.map(function(line) {
             var parts = line.split(',');
-            // 东财格式: 日期,开,收,高,低,成交量,... -> 我们只取日期和收盘价
             return { date: parts[0], val: parseFloat(parts[2]) };
           });
           resolve(klines);
@@ -439,21 +443,19 @@ function fetchKlineHistory(secid) {
 
     var script = document.createElement('script');
     script.id = cbName;
-    // klt=101(日线), fqt=1(前复权)
+    // 优化：lmt=10000 直接拉满东财上限，保证有15年数据
     script.src = 'https://push2his.eastmoney.com/api/qt/stock/kline/get?cb=' + cbName + 
                  '&secid=' + secid + 
-                 '&klt=101&fqt=1&lmt=4000&end=20500101&iscca=1&fields1=f1,f2,f3,f4,f5,f6,f7,f8&fields2=f51,f52,f53,f54,f55,f56';
+                 '&klt=101&fqt=1&lmt=10000&end=20500101&iscca=1&fields1=f1,f2,f3,f4,f5,f6,f7,f8&fields2=f51,f52,f53,f54,f55,f56';
     script.onerror = function() { resolve(null); delete window[cbName]; if(script.parentNode) script.remove(); };
     document.body.appendChild(script);
 
-    // 8秒超时兜底
     setTimeout(function() {
       if (window[cbName]) { resolve(null); delete window[cbName]; if(script.parentNode) script.remove(); }
     }, 8000);
   });
 }
 
-/* 原场外基金历史净值获取（保留用于 020465 等场外基金） */
 function fetchHistory(code) {
   return new Promise(function(resolve) {
     var script = document.createElement('script');
@@ -483,7 +485,7 @@ function fetchHistory(code) {
 }
 
 /* ============================================================
- * 图1：股债性价比（使用稳定的 push2his 接口）
+ * 图1：股债性价比
  * ============================================================ */
 async function initERPChart() {
   var chartDom = document.getElementById('erpChart');
@@ -491,7 +493,6 @@ async function initERPChart() {
   erpChartInstance.showLoading({ text: '拉取15年历史数据...', color: '#3b82f6' });
 
   try {
-    // 改用 push2his 稳定接口，510300(沪深300) 和 511260(十年国债)
     var hs300DataRaw = await fetchKlineHistory('1.510300');
     var bondDataRaw  = await fetchKlineHistory('1.511260');
     
@@ -1463,7 +1464,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V9.3 已过滤周末幽灵信号，且严格拦截"接飞刀"式预埋。</div>'
+      + '<div style="font-size:13px">V9.4 已过滤周末幽灵信号，且严格拦截"接飞刀"式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
@@ -1623,10 +1624,8 @@ async function refreshAll() {
 
     if (!closes) {
       if (fund.code === '020465') {
-        // 场外基金使用原接口
         try { closes = await fetchHistory(fund.code); } catch(e) {}
       } else {
-        // 场内ETF使用稳定的 push2his
         var secid = (fund.code.startsWith('5') || fund.code.startsWith('6')) ? '1.' + fund.code : '0.' + fund.code;
         try {
           var klineData = await fetchKlineHistory(secid);
