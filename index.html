@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V9.5 | 历史修复版</title>
+<title>基金监测系统 V9.6 | 终极优化版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -223,7 +223,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V9.5 历史修复版</span></h1>
+    <h1>📊 基金监测系统 <span>V9.6 终极优化版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -365,7 +365,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V9.5 历史修复版：真实12年历史数据拉满 | 图2真实历史数据回填</p>
+    <p>V9.6 终极优化版：12年真实数据 | 修复图2资金断层 | 图1大底区不遮挡曲线</p>
   </div>
 </div>
 
@@ -426,8 +426,6 @@ function fetchKlineHistory(secid, isIndex) {
         if (data && data.data && data.data.klines) {
           var klines = data.data.klines.map(function(line) {
             var parts = line.split(',');
-            // 指数返回格式：日期,开,收,高,低...
-            // ETF返回格式：日期,开,收,高,低...
             return { date: parts[0], val: parseFloat(parts[2]) };
           });
           resolve(klines);
@@ -441,7 +439,6 @@ function fetchKlineHistory(secid, isIndex) {
 
     var script = document.createElement('script');
     script.id = cbName;
-    // 关键修改：beg=0, end=20500101, lmt=10000 保证从头开始拉取全部历史
     script.src = 'https://push2his.eastmoney.com/api/qt/stock/kline/get?cb=' + cbName + 
                  '&secid=' + secid + 
                  '&klt=101&fqt=1&beg=0&end=20500101&lmt=10000&iscca=1&fields1=f1,f2,f3,f4,f5,f6,f7,f8&fields2=f51,f52,f53,f54,f55,f56';
@@ -491,7 +488,6 @@ async function initERPChart() {
   erpChartInstance.showLoading({ text: '拉取12年历史数据...', color: '#3b82f6' });
 
   try {
-    // 沪深300 (510300) 和 老牌国债 (511010)
     var hs300DataRaw = await fetchKlineHistory('1.510300');
     var bondDataRaw  = await fetchKlineHistory('1.511010');
     
@@ -530,7 +526,9 @@ async function initERPChart() {
     var lastRatio = ratios[ratios.length - 1];
     document.getElementById('fbVal').textContent = lastRatio.toFixed(3);
     var descEl = document.getElementById('fbDesc');
-    var greenLineVal = ratioMin * 1.25;
+    
+    // 优化：把绿区改为从历史最低点开始
+    var greenLineVal = ratioMin * 1.15; // 稍微放宽 15%
     var redLineVal = ratioMax * 0.90;
 
     if (lastRatio <= greenLineVal) {
@@ -578,7 +576,8 @@ async function initERPChart() {
               { yAxis: redLineVal,   lineStyle:{ color:'#ef4444', type:'dashed', width:1 } }
             ]
           },
-          markArea: { itemStyle:{ color:'rgba(16,185,129,0.15)' }, data:[[{ yAxis:0 },{ yAxis:greenLineVal }]] }
+          // 绿区改为从历史极低点开始，避免遮挡曲线
+          markArea: { itemStyle:{ color:'rgba(16,185,129,0.15)' }, data:[[{ yAxis:ratioMin },{ yAxis:greenLineVal }]] }
         }
       ]
     };
@@ -591,7 +590,7 @@ async function initERPChart() {
 }
 
 /* ============================================================
- * 图2：情绪与资金图（加入真实历史回填）
+ * 图2：情绪与资金图（修复 lmt=50，获取足量真实历史）
  * ============================================================ */
 function initSentimentChart() {
   var chartDom = document.getElementById('sentimentChart');
@@ -601,7 +600,7 @@ function initSentimentChart() {
   var historyStr = localStorage.getItem('marketSentimentHistory');
   var history = historyStr ? JSON.parse(historyStr) : [];
 
-  // 如果本地不足 22 天，说明是首跑或断档，直接拉取 22 天真实资金历史回填
+  // 强制重拉，或者不足22天时重拉，保证柱子不断档
   if (history.length < 22) {
     var cbName = 'flow_his_cb_' + Date.now();
     window[cbName] = function(data) {
@@ -609,13 +608,11 @@ function initSentimentChart() {
         if (data && data.data && data.data.klines) {
           var klines = data.data.klines;
           var newHistory = [];
-          // 取最后 22 天
-          var startIdx = Math.max(0, klines.length - 22);
-          for (var i = startIdx; i < klines.length; i++) {
+          // lmt=50 会返回最近50天，我们全存下来，图表只展示最后22天
+          for (var i = 0; i < klines.length; i++) {
             var parts = klines[i].split(',');
-            var date = parts[0]; // YYYY-MM-DD
-            var mainFlow = parseFloat(parts[1]) / 100000000; // 转为亿
-            // 广度没有历史记录，用 50 填充或者简单模拟，真实度稍欠但不影响走势
+            var date = parts[0];
+            var mainFlow = parseFloat(parts[1]) / 100000000; // 亿
             newHistory.push({
               date: date,
               breadth: 50, 
@@ -623,8 +620,7 @@ function initSentimentChart() {
               indices: { sh:'0.00', sz:'0.00', cyb:'0.00', kc:'0.00', bz:'0.00' }
             });
           }
-          // 合并本地最新的真实指数数据
-          if (window._tempIndices) {
+          if (window._tempIndices && newHistory.length > 0) {
              newHistory[newHistory.length - 1].indices = window._tempIndices;
           }
           localStorage.setItem('marketSentimentHistory', JSON.stringify(newHistory));
@@ -639,7 +635,8 @@ function initSentimentChart() {
     };
     var s = document.createElement('script');
     s.id = cbName;
-    s.src = 'https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?cb=' + cbName + '&lmt=0&klt=101&secid=1.000001&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65';
+    // lmt=50 保证拿足 50 天数据，前端再截取
+    s.src = 'https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?cb=' + cbName + '&lmt=50&klt=101&secid=1.000001&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65';
     document.body.appendChild(s);
     return;
   }
@@ -647,8 +644,12 @@ function initSentimentChart() {
   renderSentimentOption(history);
 }
 
-function renderSentimentOption(history) {
+function renderSentimentOption(rawHistory) {
   sentimentChartInstance.hideLoading();
+  
+  // 只取最后 22 天展示，保持美观
+  var history = rawHistory.slice(-22);
+  
   var dates = history.map(function(h) { return h.date.substring(5); });
   var breadthData = history.map(function(h) { return h.breadth; });
   var flowData = history.map(function(h) { return h.flow; });
@@ -719,7 +720,7 @@ function recordSentimentData(breadth, flowYi, indicesData) {
     if (todayIndex >= 0) history[todayIndex] = newRecord;
     else {
       history.push(newRecord);
-      if (history.length > 22) history = history.slice(-22);
+      if (history.length > 50) history = history.slice(-50);
     }
     localStorage.setItem('marketSentimentHistory', JSON.stringify(history));
     renderSentimentOption(history);
@@ -1488,7 +1489,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V9.5 已过滤周末幽灵信号，且严格拦截"接飞刀"式预埋。</div>'
+      + '<div style="font-size:13px">V9.6 已过滤周末幽灵信号，且严格拦截"接飞刀"式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
