@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V9.7 | 最终调整版</title>
+<title>基金监测系统 V9.8 | 期指探针版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -87,7 +87,8 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 .track-stat .ts-val { font-size:24px; font-weight:800; letter-spacing:-1px; }
 .track-stat .ts-sub { font-size:10px; color:var(--muted); margin-top:4px; }
 
-.macro-panel { display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px; margin-bottom:16px; }
+/* 改为 4 列以容纳升贴水模块 */
+.macro-panel { display:grid; grid-template-columns: 2fr 1fr 1fr 1.2fr; gap:10px; margin-bottom:16px; }
 .macro-item { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; }
 .macro-item .mlabel { font-size:11px; color:var(--muted); margin-bottom:4px; }
 .macro-item .mval { font-size:20px; font-weight:700; }
@@ -216,14 +217,14 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
   background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.2); color:#94a3b8; }
 
 @media (max-width:1200px) { .sentiment-panel { grid-template-columns: 1fr 1fr; } .st-card.diagnosis-m { grid-column: span 2; } }
-@media (max-width:1100px) { .macro-radar-panel { grid-template-columns: 1fr 1fr; } .mr-card.diagnosis { grid-column: span 2; } }
+@media (max-width:1100px) { .macro-radar-panel { grid-template-columns: 1fr 1fr; } .mr-card.diagnosis { grid-column: span 2; } .macro-panel { grid-template-columns: 1fr 1fr; } }
 @media (max-width:900px) { .macro-panel { grid-template-columns:1fr 1fr; } .radar { grid-template-columns:repeat(3,1fr); } .grid { grid-template-columns:1fr; } .track-stats { grid-template-columns:repeat(2,1fr); } .macro-radar-panel { grid-template-columns: 1fr; } .mr-card.diagnosis { grid-column: span 1; } .sentiment-panel { grid-template-columns: 1fr; } .st-card.diagnosis-m { grid-column: span 1; } }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V9.7 最终调整版</span></h1>
+    <h1>📊 基金监测系统 <span>V9.8 期指探针版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -335,6 +336,12 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
     </div>
     <div class="macro-item"><div class="mlabel">股债性价比</div><div class="mval" id="mErp">--</div><div class="msub" id="mErpSub">加载中</div></div>
     <div class="macro-item"><div class="mlabel">建议总仓位</div><div class="mval" id="mPos">--</div><div class="msub" id="mPosSub">加载中</div></div>
+    <!-- 新增：期指升贴水探针 -->
+    <div class="macro-item">
+      <div class="mlabel">IF期指升贴水探针</div>
+      <div class="mval" id="mBasis" style="font-size:16px; color:var(--muted);">--</div>
+      <div class="msub" id="mBasisSub" style="font-size:10px; margin-top:4px;">计算中...</div>
+    </div>
   </div>
 
   <div class="radar" id="radar">
@@ -365,7 +372,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V9.7 最终调整版：12年真实数据 | 图2无资金断层 | 图1大底区定标 2022-10-31</p>
+    <p>V9.8 期指探针版：接入 IF 主力升贴水 | 图1定标大底 | 图2真实无断层</p>
   </div>
 </div>
 
@@ -416,9 +423,9 @@ function cleanOldCache() {
 }
 
 /* ============================================================
- * K线获取函数（beg=0 确保拉满历史）
+ * K线获取函数（用于图表和场内基金）
  * ============================================================ */
-function fetchKlineHistory(secid, isIndex) {
+function fetchKlineHistory(secid) {
   return new Promise(function(resolve) {
     var cbName = 'kline_cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
     window[cbName] = function(data) {
@@ -480,7 +487,7 @@ function fetchHistory(code) {
 }
 
 /* ============================================================
- * 图1：股债性价比（绿区上移到 2022-10-31 历史大底）
+ * 图1：股债性价比
  * ============================================================ */
 async function initERPChart() {
   var chartDom = document.getElementById('erpChart');
@@ -527,7 +534,6 @@ async function initERPChart() {
     document.getElementById('fbVal').textContent = lastRatio.toFixed(3);
     var descEl = document.getElementById('fbDesc');
     
-    // 获取 2022-10-31 的比值作为绿区上边界
     var greenLineVal = 1.399; // 默认兜底值
     for (var k = 0; k < dates.length; k++) {
       if (dates[k] === '2022-10-31') {
@@ -582,7 +588,6 @@ async function initERPChart() {
               { yAxis: redLineVal,   lineStyle:{ color:'#ef4444', type:'dashed', width:1 } }
             ]
           },
-          // 绿区严格贴合 2022-10-31 底部
           markArea: { itemStyle:{ color:'rgba(16,185,129,0.15)' }, data:[[{ yAxis:0 },{ yAxis:greenLineVal }]] }
         }
       ]
@@ -596,7 +601,7 @@ async function initERPChart() {
 }
 
 /* ============================================================
- * 图2：情绪与资金图（V9.5 稳定版，lmt=50 获取历史，前端截取22天）
+ * 图2：情绪与资金图
  * ============================================================ */
 function initSentimentChart() {
   var chartDom = document.getElementById('sentimentChart');
@@ -639,7 +644,6 @@ function initSentimentChart() {
     };
     var s = document.createElement('script');
     s.id = cbName;
-    // 关键修复：lmt=50 确保拿全历史，前端再截取最后 22 天，防止断层
     s.src = 'https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?cb=' + cbName + '&lmt=50&klt=101&secid=1.000001&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65';
     document.body.appendChild(s);
     return;
@@ -651,7 +655,6 @@ function initSentimentChart() {
 function renderSentimentOption(rawHistory) {
   sentimentChartInstance.hideLoading();
   
-  // 只取最后 22 天展示，保持美观
   var history = rawHistory.slice(-22);
   
   var dates = history.map(function(h) { return h.date.substring(5); });
@@ -1493,7 +1496,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V9.7 已过滤周末幽灵信号，且严格拦截"接飞刀"式预埋。</div>'
+      + '<div style="font-size:13px">V9.8 已过滤周末幽灵信号，且严格拦截"接飞刀"式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
@@ -1603,6 +1606,58 @@ function setStatus(state, text) {
 }
 
 /* ============================================================
+ * 新增：计算期指升贴水
+ * ============================================================ */
+async function updateBasisProbe() {
+  try {
+    var futuresData = await fetchKlineHistory('220.IFM0');
+    var spotData = await fetchKlineHistory('1.510300');
+
+    if (!futuresData || !spotData || futuresData.length < 2 || spotData.length < 2) {
+      throw new Error("无足够数据");
+    }
+
+    var fToday = futuresData[futuresData.length - 1];
+    var sToday = spotData[spotData.length - 1];
+    
+    var fPrev = futuresData[futuresData.length - 2];
+    var sPrev = spotData[spotData.length - 2];
+
+    var basisToday = fToday.val - sToday.val;
+    var basisPrev = fPrev.val - sPrev.val;
+    var basisChange = basisToday - basisPrev;
+
+    var spotPct = ((sToday.val - sPrev.val) / sPrev.val) * 100;
+
+    document.getElementById('mBasis').textContent = basisToday.toFixed(2) + ' 点';
+    document.getElementById('mBasis').style.color = basisToday >= 0 ? 'var(--red)' : 'var(--green)';
+    
+    var subEl = document.getElementById('mBasisSub');
+    var text = '';
+    var color = 'var(--muted)';
+
+    if (basisChange > 5 && spotPct > 0.2) {
+      text = '🔥 贴水收敛，多头进场';
+      color = 'var(--green)';
+    } else if (basisChange < -5 && spotPct < -0.2) {
+      text = '⚠️ 贴水扩大，空头压制';
+      color = 'var(--red)';
+    } else {
+      text = '🟡 基差平缓，多空均衡';
+      color = 'var(--yellow)';
+    }
+
+    subEl.textContent = text;
+    subEl.style.color = color;
+
+  } catch(e) {
+    document.getElementById('mBasis').textContent = '--';
+    document.getElementById('mBasisSub').textContent = '获取失败';
+    document.getElementById('mBasisSub').style.color = 'var(--red)';
+  }
+}
+
+/* ============================================================
  * 主刷新流程
  * ============================================================ */
 async function refreshAll() {
@@ -1614,7 +1669,8 @@ async function refreshAll() {
 
   setStatus('loading', '拉取历史数据...');
   await initERPChart();
-  initSentimentChart(); // 这里如果缺少历史会自动去拉取历史填充
+  initSentimentChart(); 
+  updateBasisProbe(); // 发起升贴水计算
 
   var total = ALL_FUNDS.length;
   var today = new Date().toISOString().slice(0, 10);
