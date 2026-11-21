@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金监测系统 V9.6 | 终极优化版</title>
+<title>基金监测系统 V9.7 | 最终调整版</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -223,7 +223,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 基金监测系统 <span>V9.6 终极优化版</span></h1>
+    <h1>📊 基金监测系统 <span>V9.7 最终调整版</span></h1>
     <div class="header-right">
       <span><span class="dot" id="statusDot"></span><span id="updateTime">初始化...</span></span>
       <button class="btn" onclick="exportSignals()">📥 导出CSV</button>
@@ -365,7 +365,7 @@ body { font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans
 
   <div class="footer">
     <p>⚠️ 风险提示：本系统所有信号均为量化模型计算结果，仅供个人参考，不构成投资建议。</p>
-    <p>V9.6 终极优化版：12年真实数据 | 修复图2资金断层 | 图1大底区不遮挡曲线</p>
+    <p>V9.7 最终调整版：12年真实数据 | 图2无资金断层 | 图1大底区定标 2022-10-31</p>
   </div>
 </div>
 
@@ -480,7 +480,7 @@ function fetchHistory(code) {
 }
 
 /* ============================================================
- * 图1：股债性价比
+ * 图1：股债性价比（绿区上移到 2022-10-31 历史大底）
  * ============================================================ */
 async function initERPChart() {
   var chartDom = document.getElementById('erpChart');
@@ -527,8 +527,14 @@ async function initERPChart() {
     document.getElementById('fbVal').textContent = lastRatio.toFixed(3);
     var descEl = document.getElementById('fbDesc');
     
-    // 优化：把绿区改为从历史最低点开始
-    var greenLineVal = ratioMin * 1.15; // 稍微放宽 15%
+    // 获取 2022-10-31 的比值作为绿区上边界
+    var greenLineVal = 1.399; // 默认兜底值
+    for (var k = 0; k < dates.length; k++) {
+      if (dates[k] === '2022-10-31') {
+        greenLineVal = ratios[k];
+        break;
+      }
+    }
     var redLineVal = ratioMax * 0.90;
 
     if (lastRatio <= greenLineVal) {
@@ -576,8 +582,8 @@ async function initERPChart() {
               { yAxis: redLineVal,   lineStyle:{ color:'#ef4444', type:'dashed', width:1 } }
             ]
           },
-          // 绿区改为从历史极低点开始，避免遮挡曲线
-          markArea: { itemStyle:{ color:'rgba(16,185,129,0.15)' }, data:[[{ yAxis:ratioMin },{ yAxis:greenLineVal }]] }
+          // 绿区严格贴合 2022-10-31 底部
+          markArea: { itemStyle:{ color:'rgba(16,185,129,0.15)' }, data:[[{ yAxis:0 },{ yAxis:greenLineVal }]] }
         }
       ]
     };
@@ -590,7 +596,7 @@ async function initERPChart() {
 }
 
 /* ============================================================
- * 图2：情绪与资金图（修复 lmt=50，获取足量真实历史）
+ * 图2：情绪与资金图（V9.5 稳定版，lmt=50 获取历史，前端截取22天）
  * ============================================================ */
 function initSentimentChart() {
   var chartDom = document.getElementById('sentimentChart');
@@ -600,7 +606,6 @@ function initSentimentChart() {
   var historyStr = localStorage.getItem('marketSentimentHistory');
   var history = historyStr ? JSON.parse(historyStr) : [];
 
-  // 强制重拉，或者不足22天时重拉，保证柱子不断档
   if (history.length < 22) {
     var cbName = 'flow_his_cb_' + Date.now();
     window[cbName] = function(data) {
@@ -608,7 +613,6 @@ function initSentimentChart() {
         if (data && data.data && data.data.klines) {
           var klines = data.data.klines;
           var newHistory = [];
-          // lmt=50 会返回最近50天，我们全存下来，图表只展示最后22天
           for (var i = 0; i < klines.length; i++) {
             var parts = klines[i].split(',');
             var date = parts[0];
@@ -635,7 +639,7 @@ function initSentimentChart() {
     };
     var s = document.createElement('script');
     s.id = cbName;
-    // lmt=50 保证拿足 50 天数据，前端再截取
+    // 关键修复：lmt=50 确保拿全历史，前端再截取最后 22 天，防止断层
     s.src = 'https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?cb=' + cbName + '&lmt=50&klt=101&secid=1.000001&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65';
     document.body.appendChild(s);
     return;
@@ -1489,7 +1493,7 @@ function renderTrack() {
     wrap.innerHTML = '<div style="padding:80px 20px;text-align:center;color:var(--muted)">'
       + '<div style="font-size:40px;margin-bottom:16px">🎯</div>'
       + '<div style="font-size:16px;color:var(--text);margin-bottom:8px">暂无信号记录</div>'
-      + '<div style="font-size:13px">V9.6 已过滤周末幽灵信号，且严格拦截"接飞刀"式预埋。</div>'
+      + '<div style="font-size:13px">V9.7 已过滤周末幽灵信号，且严格拦截"接飞刀"式预埋。</div>'
       + '<div style="font-size:13px;margin-top:8px">耐心等待右侧确认信号。</div>'
       + '</div>';
     return wrap;
